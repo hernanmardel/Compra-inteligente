@@ -1,0 +1,15 @@
+/** Auto-generated from theme.config.js. Do not edit manually. */
+export interface ThemeColorConfig {
+  primary: { light: string; dark: string };
+  background: { light: string; dark: string };
+  surface: { light: string; dark: string };
+  foreground: { light: string; dark: string };
+  muted: { light: string; dark: string };
+  border: { light: string; dark: string };
+  success: { light: string; dark: string };
+  warning: { light: string; dark: string };
+  error: { light: string; dark: string };
+  accent: { light: string; dark: string };
+}
+
+export const themeColors: ThemeColorConfig;

@@ -1,0 +1,80 @@
+# Project TODO - CompraInteligente
+
+- [x] Configurar tema de colores (verde esmeralda como primary)
+- [x] Configurar iconos de tab bar (5 tabs: Inicio, Lista, Ofertas, Mapa, Ahorros)
+- [x] Crear datos mock de productos, supermercados y ofertas
+- [x] Pantalla Inicio con resumen de ahorro y ofertas destacadas
+- [x] Pantalla Lista de Compras con agregar/editar/marcar productos
+- [x] Pantalla Ofertas Cerca con lista de supermercados y ofertas
+- [x] Pantalla Mapa con marcadores de supermercados
+- [x] Pantalla Ahorros con resumen e historial
+- [x] Generar logo de la app
+- [x] Actualizar app.config.ts con branding
+- [x] Verificar que no hay errores de TypeScript
+- [x] Productos personalizados: poder crear, editar y eliminar productos propios
+- [x] Actualizar productos existentes (nombre, precio, categoría, ícono)
+- [x] Persistencia con AsyncStorage para que los productos personalizados se guarden
+- [x] Rediseñar pantalla Lista: más fácil y visible el armado de la lista de compras
+- [x] Campo de búsqueda más prominente y siempre visible
+- [x] Categorías rápidas para agregar productos con 1 tap
+- [x] Barra de progreso visual de la lista (cuánto falta por comprar)
+- [x] Botón grande y visible de "Agregar producto"
+- [x] Ofertas por ubicación: usar geolocalización real del dispositivo
+- [x] Incluir mayoristas además de supermercados (precios al por mayor)
+- [x] Filtrar comercios y mayoristas por distancia real del usuario
+- [x] Mostrar tipo de comercio (supermercado, mayorista, almacén, etc.)
+- [x] Ranking de precios más bajos según distancia y ahorro
+- [x] Indicador de carga de ubicación en la pantalla Ofertas
+- [ ] Integración con OpenAI: API Key configurada y validada
+- [x] Endpoint de asistente de compras inteligente en el servidor
+- [x] Pantalla de chat con el asistente AI
+- [x] Sugerencias inteligentes basadas en la lista de compras
+- [x] Tips de ahorro personalizados por categoría
+- [x] Corregir GPS: detectar ubicación real del dispositivo en vez de CABA por defecto
+- [x] Actualizar ofertas y comercios dinámicamente según ubicación real
+- [x] Mapa interactivo real con Google Maps/Mapbox y pins de comercios
+- [x] Mostrar posición del usuario en el mapa
+- [x] Pins de colores según tipo de comercio (supermercado, mayorista, comercio)
+- [x] Tap en pin para ver detalles y ofertas del comercio
+- [x] Quitar OpenAI: eliminar asistente AI, tab, endpoint y archivos relacionados
+- [x] Solucionar error de construcción del APK
+- [x] Fix build APK: pnpm install falla por discrepancia lockfile/package.json y react-native-maps/webview en lockfile
+- [x] Corregir coordenadas de comercios mock para Bahía Blanca (-38.0418, -57.5465)
+- [x] Integrar Google Places API para obtener comercios reales cercanos
+- [x] Buscar ofertas automáticamente en páginas web de comercios
+- [x] Permitir al usuario definir el área de búsqueda (radio)
+- [x] Quitar comercios mock y mostrar solo comercios reales por GPS
+- [x] Fix Google Places API: REQUEST_DENIED - fallback automático cuando API no funciona
+- [x] Fallback a datos mock realistas de Mar del Plata si Google Places no funciona
+- [x] Mostrar comercios reales cercanos a la ubicación GPS del usuario (Mar del Plata -38.0418, -57.5466)
+- [x] Corregir direcciones de comercios con calle real y numeración correcta de Mar del Plata
+- [x] Implementar mapa funcional con react-native-maps (nativo en iOS/Android)
+- [x] Detección automática de ciudad por coordenadas GPS para funcionar en cualquier ciudad
+- [x] Reemplazar Google Places API por Nominatim/OpenStreetMap (sin tarjeta, sin API Key)
+- [x] Implementar servidor con Overpass API para buscar comercios reales
+- [x] Implementar Nominatim reverse geocoding para detectar ciudad automáticamente
+- [x] Actualizar pantalla Mapa para usar datos reales de OpenStreetMap
+- [x] Actualizar pantalla Inicio y Ofertas para usar Nominatim geocoding
+- [x] Tests actualizados para verificar Overpass API y Nominatim
+- [x] Fix GPS: se queda conectando indefinidamente, agregar timeout y fallback
+- [x] Fix crash: la app se cierra al abrir la pantalla del mapa
+- [x] Configurar Google Places API Key (GOOGLE_PLACES_API_KEY) en el servidor
+- [x] Actualizar google-places.ts para usar GOOGLE_PLACES_API_KEY
+- [x] Actualizar routers.ts: prioridad Google Places > OpenStreetMap > Fallback Mock
+- [x] Fix GPS: se queda en "Detectando..." en el teléfono - simplificar y usar fallback inmediato
+- [x] Fix crash: el mapa cierra la app - reemplazar por enlace a Google Maps externo
+- [x] Usar solo Google Places API (eliminar OpenStreetMap/Overpass)
+- [x] Configurar API Key de Google Places (GOOGLE_PLACES_API_KEY)
+- [x] Validar API Key con tests (nearby search + geocoding OK)
+- [x] Filtros por categoría de producto en pantalla Ofertas (lácteos, panadería, frutas, limpieza, etc.)
+- [x] Botón para agregar productos en oferta al listado de productos para el futuro
+- [x] Expandir catálogo de productos con más productos del hogar (higiene, limpieza, mascotas, bebés, etc.)
+- [x] Al tocar una categoría en Lista, expandir lista de productos disponibles para agregar con 1 tap
+- [x] Fix panel categorías: agregar scroll vertical y simplificar diseño visual
+- [x] Corregir permisos nativos de ubicación para Android instalado
+- [x] Reforzar la detección, reintento y estados de GPS en cualquier dispositivo Android
+- [x] Mostrar detalle de oferta con comercio, dirección y distancia al seleccionarla
+- [x] Permitir añadir desde el detalle de oferta e iniciar navegación hacia el comercio
+- [x] Hacer seleccionables las ofertas de Inicio con una ficha simplificada para agregar a la lista o ir al comercio
+- [x] Rediseñar Inicio con una acción principal clara para armar la compra y accesos rápidos a Lista y Ofertas
+- [x] Preparar un paquete descargable del proyecto para continuar el desarrollo en otro entorno
