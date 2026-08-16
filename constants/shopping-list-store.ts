@@ -26,16 +26,20 @@ export async function saveShoppingListItems(items: ShoppingListItem[]): Promise<
   await AsyncStorage.setItem(SHOPPING_LIST_KEY, JSON.stringify(items));
 }
 
-/** Inserta el producto en la lista o aumenta su cantidad si ya estaba pendiente. */
+/** Inserta el producto en la lista o aumenta su cantidad si ya estaba pendiente.
+ * normalPrice y storeName son opcionales: solo se conocen cuando el producto viene de una oferta real,
+ * y son los que permiten calcular ahorro genuino en la pantalla de Ahorros. */
 export async function addProductToShoppingList(
   product: Product,
   estimatedPrice: number,
+  normalPrice?: number,
+  storeName?: string,
 ): Promise<ShoppingListItem[]> {
   const items = await getShoppingListItems();
   const existingIndex = items.findIndex((item) => item.product.id === product.id && !item.checked);
 
   const nextItems = existingIndex >= 0
-    ? items.map((item, index) => index === existingIndex ? { ...item, quantity: item.quantity + 1, estimatedPrice } : item)
+    ? items.map((item, index) => index === existingIndex ? { ...item, quantity: item.quantity + 1, estimatedPrice, normalPrice: normalPrice ?? item.normalPrice, storeName: storeName ?? item.storeName } : item)
     : [
         ...items,
         {
@@ -44,6 +48,8 @@ export async function addProductToShoppingList(
           quantity: 1,
           checked: false,
           estimatedPrice,
+          normalPrice,
+          storeName,
         },
       ];
 

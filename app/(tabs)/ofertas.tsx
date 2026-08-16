@@ -13,7 +13,9 @@ import {
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { getLocation, startWatchingLocation, subscribeLocation, type UserLocation } from "@/lib/location-service";
+import { useUserLocation } from "@/hooks/use-user-location";
+import { LocationPill } from "@/components/location-pill";
+import { DataSourceBanner } from "@/components/data-source-banner";
 import { useAllNearbyPlaces, useStoreOffers, type StorePlace } from "@/hooks/use-google-places";
 import * as Haptics from "expo-haptics";
 import { trpc } from "@/lib/trpc";
@@ -91,62 +93,16 @@ interface SelectedOffer {
 
 export default function OfertasScreen() {
   const colors = useColors();
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [locationLoading, setLocationLoading] = useState(true);
-  const [locationError, setLocationError] = useState(false);
+  const userLocationState = useUserLocation();
+  const { userLocation, currentCity } = userLocationState;
   const [selectedRadius, setSelectedRadius] = useState(5000);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedProductCategory, setSelectedProductCategory] = useState<string>("Todos");
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [currentCity, setCurrentCity] = useState<string | null>(null);
   const [addedProducts, setAddedProducts] = useState<Set<string>>(new Set());
   const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(null);
 
-  // Reverse geocoding con Google API
-  const geocodeQuery = trpc.places.reverseGeocode.useQuery(
-    { lat: userLocation?.latitude ?? 0, lng: userLocation?.longitude ?? 0 },
-    { enabled: !!userLocation && !currentCity }
-  );
-
-  useEffect(() => {
-    if (geocodeQuery.data?.city) {
-      setCurrentCity(geocodeQuery.data.city);
-    }
-  }, [geocodeQuery.data]);
-
-  // Get location once
-  useEffect(() => {
-    let sub: (() => void) | undefined;
-    let watch: { remove: () => void } | null = null;
-    let mounted = true;
-
-    (async () => {
-      const loc = await getLocation();
-      if (!mounted) return;
-      if (loc) {
-        setUserLocation(loc);
-        setLocationLoading(false);
-      } else {
-        setLocationLoading(false);
-        setLocationError(true);
-      }
-      sub = subscribeLocation((newLoc) => {
-        setUserLocation(newLoc);
-        setLocationError(false);
-        setLocationLoading(false);
-      });
-      watch = await startWatchingLocation((newLoc) => {
-        if (mounted) setUserLocation(newLoc);
-      });
-    })();
-    return () => {
-      mounted = false;
-      if (sub) sub();
-      watch?.remove();
-    };
-  }, []);
-
-  const { data: places, isLoading, refetch } = useAllNearbyPlaces(
+  const { data: places, isLoading, isFallback: placesFallback, isError: placesError, refetch } = useAllNearbyPlaces(
     userLocation?.latitude ?? 0,
     userLocation?.longitude ?? 0,
     selectedRadius,
@@ -154,17 +110,9 @@ export default function OfertasScreen() {
   );
 
   const onRefresh = useCallback(async () => {
-    setLocationLoading(true);
-    const location = await getLocation();
-    if (location) {
-      setUserLocation(location);
-      setLocationError(false);
-    } else {
-      setLocationError(true);
-    }
-    setLocationLoading(false);
+    await userLocationState.retry();
     await refetch();
-  }, [refetch]);
+  }, [refetch, userLocationState]);
 
   const filteredPlaces = selectedType
     ? (places ?? []).filter((p: StorePlace) => p.storeType === selectedType)
@@ -257,28 +205,14 @@ export default function OfertasScreen() {
         <View className="pt-4 pb-2">
           <View className="flex-row items-center justify-between">
             <Text className="text-2xl font-bold text-foreground">Ofertas Cerca</Text>
-            {locationLoading ? (
-              <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 bg-surface" style={{ borderWidth: 1, borderColor: colors.border }}>
-                <Text style={{ fontSize: 12 }}>📍</Text>
-                <Text className="text-xs text-muted">Detectando GPS...</Text>
-              </View>
-            ) : locationError ? (
-              <TouchableOpacity onPress={onRefresh} className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.warning + '20' }}>
-                <Text style={{ fontSize: 12 }}>⚠️</Text>
-                <Text className="text-xs font-medium" style={{ color: colors.warning }}>Activar GPS</Text>
-              </TouchableOpacity>
-            ) : userLocation ? (
-              <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.success + '20' }}>
-                <Text style={{ fontSize: 12 }}>📍</Text>
-                <Text className="text-xs font-semibold" style={{ color: colors.success }}>
-                  {currentCity || `${userLocation.latitude.toFixed(3)}, ${userLocation.longitude.toFixed(3)}`}
-                </Text>
-              </View>
-            ) : null}
+            <LocationPill location={userLocationState} />
           </View>
           <Text className="text-sm text-muted mt-1">
             {isLoading ? "Buscando comercios..." : `${sortedPlaces.length} comercios con ofertas`}
           </Text>
+          {!isLoading && (
+            <DataSourceBanner isFallback={placesFallback} isError={placesError} onRetry={() => void onRefresh()} />
+          )}
         </View>
 
         {/* Radio filter */}

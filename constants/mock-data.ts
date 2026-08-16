@@ -17,6 +17,10 @@ export interface ShoppingListItem {
   estimatedPrice: number;
   bestPrice?: number;
   bestStore?: string;
+  /** Precio normal (sin oferta) del producto, si se agregó desde una oferta real. Sin esto no se puede calcular ahorro genuino. */
+  normalPrice?: number;
+  /** Nombre del comercio, si se agregó desde una oferta con comercio conocido. */
+  storeName?: string;
 }
 
 export type StoreType = "supermercado" | "mayorista" | "comercio" | "almacen";

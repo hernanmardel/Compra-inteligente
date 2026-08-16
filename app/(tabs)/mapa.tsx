@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -12,10 +12,11 @@ import {
 } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
-import { getLocation, startWatchingLocation, subscribeLocation, type UserLocation } from "@/lib/location-service";
+import { useUserLocation } from "@/hooks/use-user-location";
+import { LocationPill } from "@/components/location-pill";
+import { DataSourceBanner } from "@/components/data-source-banner";
 import { useAllNearbyPlaces, type StorePlace } from "@/hooks/use-google-places";
 import * as Haptics from "expo-haptics";
-import { trpc } from "@/lib/trpc";
 
 const RADIOS = [
   { value: 1000, label: "1 km" },
@@ -42,65 +43,13 @@ const TYPE_COLORS: Record<string, string> = {
 
 export default function MapaScreen() {
   const colors = useColors();
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [locationLoading, setLocationLoading] = useState(true);
-  const [locationError, setLocationError] = useState(false);
+  const userLocationState = useUserLocation();
+  const { userLocation, currentCity } = userLocationState;
   const [selectedRadius, setSelectedRadius] = useState(5000);
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
-  const [currentCity, setCurrentCity] = useState<string | null>(null);
 
-  // Detectar ciudad usando el API del servidor
-  const reverseGeocodeQuery = trpc.places.reverseGeocode.useQuery(
-    { lat: userLocation?.latitude ?? 0, lng: userLocation?.longitude ?? 0 },
-    { enabled: !!userLocation && !currentCity }
-  );
-
-  useEffect(() => {
-    if (reverseGeocodeQuery.data?.city) {
-      setCurrentCity(reverseGeocodeQuery.data.city);
-    }
-  }, [reverseGeocodeQuery.data]);
-
-  // Get location once on mount
-  useEffect(() => {
-    let sub: (() => void) | undefined;
-    let watch: { remove: () => void } | null = null;
-    let mounted = true;
-
-    (async () => {
-      // Get location immediately with timeout
-      const loc = await getLocation();
-      if (!mounted) return;
-      
-      if (loc) {
-        setUserLocation(loc);
-        setLocationError(false);
-        setLocationLoading(false);
-      } else {
-        setLocationLoading(false);
-        setLocationError(true);
-      }
-
-      // Subscribe for future updates
-      sub = subscribeLocation((newLoc) => {
-        setUserLocation(newLoc);
-        setLocationError(false);
-        setLocationLoading(false);
-      });
-      watch = await startWatchingLocation((newLoc) => {
-        if (mounted) setUserLocation(newLoc);
-      });
-    })();
-
-    return () => {
-      mounted = false;
-      if (sub) sub();
-      watch?.remove();
-    };
-  }, []);
-
-  const { data: places, isLoading, refetch } = useAllNearbyPlaces(
+  const { data: places, isLoading, isFallback: placesFallback, isError: placesError, refetch } = useAllNearbyPlaces(
     userLocation?.latitude ?? 0,
     userLocation?.longitude ?? 0,
     selectedRadius,
@@ -108,17 +57,9 @@ export default function MapaScreen() {
   );
 
   const onRefresh = useCallback(async () => {
-    setLocationLoading(true);
-    // Try to get location again
-    const loc = await getLocation();
-    if (loc) {
-      setUserLocation(loc);
-      setLocationError(false);
-    }
-    setLocationError(!loc);
-    setLocationLoading(false);
+    await userLocationState.retry();
     await refetch();
-  }, [refetch]);
+  }, [refetch, userLocationState]);
 
   const filteredPlaces = selectedType
     ? (places ?? []).filter((p: StorePlace) => p.storeType === selectedType)
@@ -173,25 +114,12 @@ export default function MapaScreen() {
       <View className="px-5 pt-4 pb-2 bg-background" style={{ zIndex: 10 }}>
         <View className="flex-row items-center justify-between">
           <Text className="text-2xl font-bold text-foreground">Comercios</Text>
-          {locationLoading ? (
-            <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 bg-surface" style={{ borderWidth: 1, borderColor: colors.border }}>
-              <ActivityIndicator size="small" color={colors.tint} />
-              <Text className="text-xs text-muted">GPS...</Text>
-            </View>
-          ) : userLocation ? (
-            <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.success + '20' }}>
-              <Text style={{ fontSize: 12 }}>📍</Text>
-              <Text className="text-xs font-semibold" style={{ color: colors.success }}>
-                {currentCity || `${userLocation.latitude.toFixed(3)}, ${userLocation.longitude.toFixed(3)}`}
-              </Text>
-            </View>
-          ) : (
-            <TouchableOpacity onPress={onRefresh} className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.warning + '20' }}>
-              <Text style={{ fontSize: 12 }}>⚠️</Text>
-              <Text className="text-xs font-medium" style={{ color: colors.warning }}>{locationError ? "Activar GPS" : "Reintentar GPS"}</Text>
-            </TouchableOpacity>
-          )}
+          <LocationPill location={userLocationState} />
         </View>
+
+        {!isLoading && (
+          <DataSourceBanner isFallback={placesFallback} isError={placesError} onRetry={() => void onRefresh()} />
+        )}
 
         {/* Open Google Maps button */}
         <TouchableOpacity
@@ -256,7 +184,7 @@ export default function MapaScreen() {
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={onRefresh} tintColor={colors.tint} />}
         contentContainerStyle={{ paddingBottom: 140 }}
       >
-        {locationLoading || isLoading ? (
+        {userLocationState.status === "loading" || isLoading ? (
           <View className="items-center py-12">
             <ActivityIndicator size="large" color={colors.tint} />
             <Text className="mt-4 text-muted">Buscando comercios cerca de ti...</Text>

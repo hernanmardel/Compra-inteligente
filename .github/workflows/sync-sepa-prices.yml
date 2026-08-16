@@ -1,0 +1,28 @@
+name: Sincronizar precios SEPA
+
+on:
+  schedule:
+    # Todos los días a las 09:00 UTC (06:00 hora Argentina) - SEPA publica de madrugada
+    - cron: "0 9 * * *"
+  workflow_dispatch: {} # permite correrlo a mano desde la pestaña "Actions" de GitHub, para probar
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias del script (sin bajar toda la app)
+        run: npm install csv-parse unzipper @supabase/supabase-js --no-save
+
+      - name: Correr sincronización de SEPA hacia Supabase
+        run: npx tsx scripts/sync-sepa-prices.ts
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}

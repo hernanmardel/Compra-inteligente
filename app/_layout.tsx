@@ -88,6 +88,8 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="landing" />
+            <Stack.Screen name="portal-comercios" />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>

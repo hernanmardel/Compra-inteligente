@@ -67,7 +67,7 @@ export function useNearbyPlaces(params: {
 
 // Buscar todos los comercios cercanos (con fallback automático)
 export function useAllNearbyPlaces(lat: number, lng: number, radius: number, cityName?: string) {
-  return trpc.places.allNearby.useQuery(
+  const query = trpc.places.allNearby.useQuery(
     { lat, lng, radius, cityName },
     {
       enabled: lat !== 0 && lng !== 0,
@@ -84,6 +84,20 @@ export function useAllNearbyPlaces(lat: number, lng: number, radius: number, cit
       },
     }
   );
+
+  // Misma query cacheada (mismo queryKey), pero leyendo el flag isFallback que el
+  // servidor ya calcula: true cuando Google Places y OpenStreetMap fallaron y se
+  // está mostrando el comercio/oferta de relleno. No pega una request extra.
+  const isFallbackQuery = trpc.places.allNearby.useQuery(
+    { lat, lng, radius, cityName },
+    {
+      enabled: lat !== 0 && lng !== 0,
+      staleTime: 2 * 60 * 1000,
+      select: (data: any) => !!data?.isFallback,
+    }
+  );
+
+  return { ...query, isFallback: isFallbackQuery.data ?? false };
 }
 
 // Obtener detalles de un lugar

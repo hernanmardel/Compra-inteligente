@@ -26,6 +26,9 @@ import {
   generateProductId,
 } from "@/constants/product-store";
 import { getShoppingListItems, saveShoppingListItems } from "@/constants/shopping-list-store";
+import { archivePurchase } from "@/constants/purchases-store";
+import { useUserLocation } from "@/hooks/use-user-location";
+import { useSepaProducts, type SepaRecord } from "@/hooks/use-sepa-products";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "@react-navigation/native";
@@ -61,6 +64,34 @@ const ICON_OPTIONS = [
   "🥦", "🫑", "🍋", "🧄", "🍫", "🧇", "🥣", "🍿",
 ];
 
+/**
+ * Suma al catálogo los productos reales de SEPA de la provincia del usuario, sin duplicar
+ * (por productId de SEPA) y sin pisar los productos default/personalizados existentes.
+ */
+function mergeSepaProducts(base: Product[], sepaRecords: SepaRecord[]): Product[] {
+  if (sepaRecords.length === 0) return base;
+
+  const existingIds = new Set(base.map((p) => p.id));
+  const seenSepaIds = new Set<string>();
+  const sepaProducts: Product[] = [];
+
+  for (const record of sepaRecords) {
+    if (!record.productId || !record.productName) continue;
+    const id = `sepa-${record.productId}`;
+    if (seenSepaIds.has(id) || existingIds.has(id)) continue;
+    seenSepaIds.add(id);
+    sepaProducts.push({
+      id,
+      name: record.productName,
+      category: record.chain || "SEPA",
+      unit: "un",
+      icon: "🏷️",
+    });
+  }
+
+  return [...base, ...sepaProducts];
+}
+
 export default function ListaScreen() {
   const colors = useColors();
   const [items, setItems] = useState<ShoppingListItem[]>([]);
@@ -68,6 +99,11 @@ export default function ListaScreen() {
   const [searchText, setSearchText] = useState("");
   const [allProducts, setAllProducts] = useState<Product[]>(PRODUCTS);
   const inputRef = useRef<TextInput>(null);
+
+  // Productos reales de SEPA/Precios Claros para la provincia detectada del usuario,
+  // en vez de depender solo del catálogo de ejemplo cargado a mano.
+  const { currentRegion } = useUserLocation();
+  const { records: sepaRecords } = useSepaProducts(currentRegion);
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -85,8 +121,14 @@ export default function ListaScreen() {
 
   const loadAllProducts = async () => {
     const products = await getAllProducts();
-    setAllProducts(products);
+    setAllProducts(mergeSepaProducts(products, sepaRecords));
   };
+
+  useEffect(() => {
+    // Cuando llegan (o se actualizan) los productos de SEPA, se re-mezclan con el catálogo
+    // ya cargado, sin perder los productos personalizados que el usuario haya agregado.
+    setAllProducts((current) => mergeSepaProducts(current, sepaRecords));
+  }, [sepaRecords]);
 
   const loadShoppingList = useCallback(async () => {
     const savedItems = await getShoppingListItems();
@@ -230,6 +272,23 @@ export default function ListaScreen() {
     }
   };
 
+  const [finalizing, setFinalizing] = useState(false);
+
+  const finalizePurchase = async () => {
+    const checkedItems = items.filter((i) => i.checked);
+    if (checkedItems.length === 0) return;
+    setFinalizing(true);
+    try {
+      await archivePurchase(checkedItems);
+      commitItems(items.filter((i) => !i.checked));
+      if (Platform.OS !== "web") {
+        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } finally {
+      setFinalizing(false);
+    }
+  };
+
   const renderItem = ({ item }: { item: ShoppingListItem }) => {
     const isCustom = !item.product.id.startsWith("p");
     return (
@@ -347,6 +406,22 @@ export default function ListaScreen() {
               }}
             />
           </View>
+        )}
+
+        {/* Finalizar compra - archiva los productos tildados como compra real */}
+        {checkedCount > 0 && (
+          <Pressable
+            disabled={finalizing}
+            onPress={() => void finalizePurchase()}
+            style={({ pressed }) => [
+              styles.finalizeBtn,
+              { backgroundColor: colors.success, opacity: pressed || finalizing ? 0.85 : 1 },
+            ]}
+          >
+            <Text className="text-white font-bold text-sm">
+              {finalizing ? "Guardando..." : `✓ Finalizar compra (${checkedCount} producto${checkedCount !== 1 ? 's' : ''})`}
+            </Text>
+          </Pressable>
         )}
       </View>
 
@@ -887,6 +962,12 @@ const styles = StyleSheet.create({
   bigAddBtn: {
     borderRadius: 18,
     paddingVertical: 16,
+    alignItems: "center",
+  },
+  finalizeBtn: {
+    marginTop: 12,
+    borderRadius: 14,
+    paddingVertical: 12,
     alignItems: "center",
   },
   suggestionItem: {

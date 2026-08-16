@@ -1,0 +1,21 @@
+COMPRAINTELIGENTE — LANDING ESTÁTICA
+
+Este paquete NO requiere instalación, programación ni compilación.
+
+1. Para verla en tu computadora: abrí index.html con Chrome, Edge, Firefox o cualquier navegador.
+2. Para publicarla: subí index.html a la carpeta public_html, www o htdocs de tu hosting.
+3. Antes de publicarla, confirmá que la app ya tenga ficha activa en Google Play.
+
+ENLACE DE GOOGLE PLAY
+
+La landing ya está preparada con este identificador de Android:
+https://play.google.com/store/apps/details?id=com.app.compra.inteligente
+
+Cuando Google Play publique la aplicación, ese enlace abrirá automáticamente la ficha de descarga. Si Play Console asigna un identificador diferente, abrí index.html con un editor de texto y reemplazá todas las apariciones de:
+
+com.app.compra.inteligente
+
+por el identificador final de tu aplicación.
+
+No hace falta modificar CSS, instalar programas ni ejecutar comandos.
+

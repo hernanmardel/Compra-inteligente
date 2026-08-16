@@ -1,26 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ScrollView, Text, View, Pressable, ActivityIndicator, Modal, Platform, StyleSheet } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { OFFERS, STORES, formatPrice, calculateSavings, calculateSavingsPercentage, updateDistancesByLocation, type Offer, type ShoppingListItem } from "@/constants/mock-data";
-import { getLocation, startWatchingLocation, subscribeLocation, type UserLocation } from "@/lib/location-service";
+import { useUserLocation } from "@/hooks/use-user-location";
+import { LocationPill } from "@/components/location-pill";
+import { DataSourceBanner } from "@/components/data-source-banner";
 import { useAllNearbyPlaces } from "@/hooks/use-google-places";
 import { router } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-import { trpc } from "@/lib/trpc";
 import { addProductToShoppingList, getShoppingListItems } from "@/constants/shopping-list-store";
+import { getPurchaseHistory } from "@/constants/purchases-store";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 
 export default function HomeScreen() {
   const colors = useColors();
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [currentCity, setCurrentCity] = useState<string | null>(null);
-  const [locationLoading, setLocationLoading] = useState(true);
-  const [locationError, setLocationError] = useState(false);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
   const [addedOfferIds, setAddedOfferIds] = useState<Set<string>>(new Set());
   const [shoppingList, setShoppingList] = useState<ShoppingListItem[]>([]);
+  const [weeklySavings, setWeeklySavings] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -30,6 +29,19 @@ export default function HomeScreen() {
         if (active) setShoppingList(items);
       });
 
+      void getPurchaseHistory().then((history) => {
+        if (!active) return;
+        const now = new Date();
+        const day = now.getDay();
+        const weekStart = new Date(now);
+        weekStart.setDate(now.getDate() - day + (day === 0 ? -6 : 1));
+        weekStart.setHours(0, 0, 0, 0);
+        const total = history
+          .filter((p) => new Date(p.date) >= weekStart)
+          .reduce((sum, p) => sum + p.totalSaved, 0);
+        setWeeklySavings(total);
+      });
+
       return () => {
         active = false;
       };
@@ -37,60 +49,11 @@ export default function HomeScreen() {
   );
 
   // Reverse geocoding con Google API (solo cuando tenemos ubicación)
-  const geocodeQuery = trpc.places.reverseGeocode.useQuery(
-    { lat: userLocation?.latitude ?? 0, lng: userLocation?.longitude ?? 0 },
-    { enabled: !!userLocation && !currentCity }
-  );
-
-  useEffect(() => {
-    if (geocodeQuery.data?.city) {
-      setCurrentCity(geocodeQuery.data.city);
-    }
-  }, [geocodeQuery.data]);
-
-  // Obtener ubicación GPS
-  useEffect(() => {
-    let mounted = true;
-    let sub: (() => void) | undefined;
-    let watch: { remove: () => void } | null = null;
-
-    (async () => {
-      const loc = await getLocation();
-      if (!mounted) return;
-      if (loc) {
-        setUserLocation(loc);
-        setLocationError(false);
-      } else {
-        setLocationError(true);
-      }
-      setLocationLoading(false);
-      sub = subscribeLocation((newLoc) => {
-        setUserLocation(newLoc);
-        setLocationError(false);
-        setLocationLoading(false);
-      });
-      watch = await startWatchingLocation((newLoc) => {
-        if (mounted) setUserLocation(newLoc);
-      });
-    })();
-
-    return () => {
-      mounted = false;
-      if (sub) sub();
-      watch?.remove();
-    };
-  }, []);
-
-  const retryLocation = async () => {
-    setLocationLoading(true);
-    const location = await getLocation();
-    setUserLocation(location);
-    setLocationError(!location);
-    setLocationLoading(false);
-  };
+  const userLocationState = useUserLocation();
+  const { userLocation, currentCity } = userLocationState;
 
   // Obtener comercios cercanos desde el servidor (Overpass API / OpenStreetMap)
-  const { data: nearbyData, isLoading: placesLoading } = useAllNearbyPlaces(
+  const { data: nearbyData, isLoading: placesLoading, isFallback: placesFallback, isError: placesError, refetch: refetchPlaces } = useAllNearbyPlaces(
     userLocation?.latitude ?? 0,
     userLocation?.longitude ?? 0,
     5000,
@@ -112,7 +75,7 @@ export default function HomeScreen() {
     .sort((a, b) => a.distance - b.distance)
     .slice(0, 4) : [];
 
-  const totalSavingsThisWeek = 5800;
+  const totalSavingsThisWeek = weeklySavings;
   const pendingItems = shoppingList.filter((item) => !item.checked);
   const completedItems = shoppingList.length - pendingItems.length;
   const listProgress = shoppingList.length > 0 ? completedItems / shoppingList.length : 0;
@@ -123,7 +86,7 @@ export default function HomeScreen() {
   const addSelectedOfferToList = async () => {
     if (!selectedOffer) return;
 
-    await addProductToShoppingList(selectedOffer.product, selectedOffer.offerPrice);
+    await addProductToShoppingList(selectedOffer.product, selectedOffer.offerPrice, selectedOffer.normalPrice, selectedOffer.store);
     setAddedOfferIds((current) => new Set(current).add(selectedOffer.id));
     setSelectedOffer(null);
 
@@ -160,29 +123,7 @@ export default function HomeScreen() {
               <Text className="text-2xl font-bold text-foreground">Hola! 👋</Text>
               <Text className="text-sm text-muted mt-1">Vamos a ahorrar en tus compras de hoy</Text>
             </View>
-            {locationLoading ? (
-              <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 bg-surface" style={{ borderWidth: 1, borderColor: colors.border }}>
-                <ActivityIndicator size="small" color={colors.tint} />
-                <Text className="text-[10px] text-muted">Buscando GPS</Text>
-              </View>
-            ) : currentCity ? (
-              <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.success + '20' }}>
-                <Text style={{ fontSize: 12 }}>📍</Text>
-                <Text className="text-[10px] font-semibold" style={{ color: colors.success }}>
-                  {currentCity}
-                </Text>
-              </View>
-            ) : userLocation ? (
-              <View className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5 bg-surface" style={{ borderWidth: 1, borderColor: colors.border }}>
-                <Text style={{ fontSize: 12 }}>📍</Text>
-                <Text className="text-[10px] text-muted">Detectando...</Text>
-              </View>
-            ) : (
-              <Pressable onPress={retryLocation} className="flex-row items-center gap-1.5 rounded-full px-3 py-1.5" style={{ backgroundColor: colors.warning + "20" }}>
-                <Text style={{ fontSize: 12 }}>📍</Text>
-                <Text className="text-[10px] font-semibold" style={{ color: colors.warning }}>{locationError ? "Activar GPS" : "Reintentar GPS"}</Text>
-              </Pressable>
-            )}
+            <LocationPill location={userLocationState} />
           </View>
         </View>
 
@@ -271,6 +212,24 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Abrir portal de comercios"
+          onPress={() => router.push("/portal-comercios" as never)}
+          style={({ pressed }) => [
+            styles.businessPortalEntry,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && { opacity: 0.8, transform: [{ scale: 0.99 }] },
+          ]}
+        >
+          <View style={styles.businessPortalBadge}><Text style={{ fontSize: 18 }}>🏪</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text className="text-sm font-bold text-foreground">¿Tenés un comercio?</Text>
+            <Text className="text-xs text-muted mt-0.5">Cargá precios y publicá tus ofertas</Text>
+          </View>
+          <Text style={{ color: colors.primary, fontSize: 18, fontWeight: "800" }}>→</Text>
+        </Pressable>
+
         {/* Section: Ofertas destacadas */}
         <View className="mt-6 flex-row items-center justify-between">
           <Text className="text-lg font-bold text-foreground">Ofertas cerca de ti</Text>
@@ -346,6 +305,14 @@ export default function HomeScreen() {
             <Text style={{ color: colors.primary, fontSize: 14, fontWeight: '600' }}>Ver mapa</Text>
           </Pressable>
         </View>
+
+        {!placesLoading && (
+          <DataSourceBanner
+            isFallback={placesFallback}
+            isError={placesError}
+            onRetry={() => void refetchPlaces()}
+          />
+        )}
 
         {placesLoading ? (
           <View className="items-center py-6">

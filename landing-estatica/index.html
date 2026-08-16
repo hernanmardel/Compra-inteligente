@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="CompraInteligente: organizá tu lista, encontrá ofertas cercanas y ahorrá en cada compra." />
+    <meta name="theme-color" content="#0B8F4B" />
+    <title>CompraInteligente | Comprá mejor, ahorrá más</title>
+    <style>
+      :root { --green:#0b8f4b; --green-dark:#056936; --mint:#e9f8ef; --ink:#10251a; --muted:#607066; --line:#dce9e0; --white:#fff; }
+      * { box-sizing:border-box; }
+      html { scroll-behavior:smooth; }
+      body { margin:0; color:var(--ink); font-family:Arial, Helvetica, sans-serif; background:#fbfdfa; }
+      a { color:inherit; text-decoration:none; }
+      .wrap { width:min(1120px, calc(100% - 40px)); margin:auto; }
+      .nav { display:flex; align-items:center; justify-content:space-between; padding:18px 0; }
+      .brand { display:flex; align-items:center; gap:10px; font-weight:800; font-size:21px; letter-spacing:-.5px; }
+      .logo { display:grid; place-items:center; width:37px; height:37px; border-radius:12px; background:var(--green); color:#fff; font-size:20px; }
+      .cta, .cta-light { display:inline-flex; align-items:center; justify-content:center; gap:9px; border-radius:12px; font-weight:700; padding:14px 18px; transition:transform .16s ease, box-shadow .16s ease; }
+      .cta { background:var(--green); color:#fff; box-shadow:0 10px 22px rgba(11,143,75,.22); }
+      .cta-light { background:#fff; color:var(--green-dark); }
+      .cta:hover, .cta-light:hover { transform:translateY(-2px); }
+      .cta:active, .cta-light:active { transform:scale(.97); }
+      .hero { overflow:hidden; position:relative; padding:50px 0 74px; background:linear-gradient(126deg,#effaf3 0%,#e6f7ed 52%,#c8eed7 100%); }
+      .hero::before { content:""; width:430px; height:430px; border-radius:50%; background:rgba(255,255,255,.55); position:absolute; top:-220px; right:-80px; }
+      .hero-grid { position:relative; display:grid; grid-template-columns:1.08fr .92fr; align-items:center; gap:42px; }
+      .eyebrow { display:inline-flex; gap:8px; align-items:center; background:#fff; padding:8px 12px; border:1px solid #d2eadb; border-radius:999px; color:var(--green-dark); font-size:14px; font-weight:700; }
+      h1 { max-width:620px; font-size:clamp(39px,5vw,64px); letter-spacing:-2.5px; line-height:.99; margin:20px 0 18px; }
+      .lead { max-width:555px; color:#405548; font-size:19px; line-height:1.55; margin:0 0 26px; }
+      .hero-note { display:flex; align-items:center; gap:10px; color:var(--green-dark); font-size:14px; font-weight:700; margin-top:15px; }
+      .phone-wrap { display:grid; justify-items:center; }
+      .phone { width:290px; min-height:535px; padding:13px; border:7px solid #163328; border-radius:38px; background:#163328; box-shadow:0 28px 55px rgba(16,37,26,.25); transform:rotate(4deg); }
+      .screen { min-height:506px; overflow:hidden; border-radius:25px; background:#f8fbf9; padding:18px 15px; }
+      .notch { width:88px; height:18px; border-radius:0 0 12px 12px; background:#163328; margin:-18px auto 14px; }
+      .app-top { display:flex; justify-content:space-between; align-items:center; font-size:12px; font-weight:700; }
+      .app-title { font-size:20px; letter-spacing:-1px; margin:20px 0 4px; }
+      .app-sub { color:#6c7b70; font-size:12px; margin:0 0 14px; }
+      .app-card { border-radius:18px; color:#fff; background:linear-gradient(145deg,#0d9c50,#05773c); padding:16px; }
+      .app-card strong { font-size:17px; display:block; margin-bottom:7px; }
+      .app-card span { color:#e2f7e9; font-size:12px; }
+      .app-button { background:#fff; color:#087b40; font-weight:700; font-size:12px; padding:11px; margin-top:14px; border-radius:11px; text-align:center; }
+      .mini-list { margin-top:16px; background:#fff; border:1px solid #e2ece5; border-radius:15px; padding:13px; }
+      .mini-list b { font-size:13px; }
+      .progress { height:6px; border-radius:6px; margin:11px 0 6px; background:#e5ece7; overflow:hidden; }
+      .progress span { display:block; width:64%; height:100%; background:var(--green); border-radius:6px; }
+      .mini-list small { color:#748178; font-size:10px; }
+      .offer { display:flex; align-items:center; gap:9px; margin-top:13px; padding:10px; border-radius:13px; background:#fff6df; color:#604b15; font-size:11px; }
+      .offer i { font-style:normal; font-size:19px; }
+      .proof { padding:25px 0; border-bottom:1px solid var(--line); background:#fff; }
+      .proof-grid { display:grid; grid-template-columns:repeat(3,1fr); text-align:center; gap:20px; }
+      .proof b { font-size:21px; display:block; color:var(--green-dark); }
+      .proof span { font-size:14px; color:var(--muted); }
+      .screens { overflow:hidden; padding:82px 0; background:#fff; }
+      .shot-grid { display:flex; gap:28px; align-items:end; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x proximity; padding:4px 4px 14px; -webkit-overflow-scrolling:touch; scrollbar-width:thin; }
+      .shot-grid::-webkit-scrollbar { height:6px; }
+      .shot-grid::-webkit-scrollbar-thumb { background:#d7e3db; border-radius:99px; }
+      .shot-card { flex:0 0 auto; scroll-snap-align:start; width:280px; }
+      .shot-frame { width:min(100%,280px); margin:0 auto; padding:8px; border:5px solid #183227; border-radius:30px; background:#183227; box-shadow:0 22px 40px rgba(16,37,26,.16); }
+      
+      .shot-screen { min-height:435px; overflow:hidden; padding:15px 13px; border-radius:19px; background:#f8fbf9; }
+      .shot-notch { width:78px; height:14px; margin:-15px auto 16px; border-radius:0 0 10px 10px; background:#183227; }
+      .status { display:flex; justify-content:space-between; font-size:9px; font-weight:800; color:#293a2f; }
+      .shot-greeting { margin:17px 0 13px; font-size:17px; letter-spacing:-.6px; }
+      .shot-label { margin:0 0 13px; color:#728077; font-size:10px; }
+      .shot-hero { padding:14px; border-radius:16px; color:#fff; background:linear-gradient(145deg,#0ca052,#08733d); }
+      .shot-hero b { display:block; margin-bottom:5px; font-size:14px; }
+      .shot-hero span { color:#dff6e6; font-size:10px; }
+      .fake-button { margin-top:12px; padding:9px; border-radius:9px; background:#fff; color:#08733d; font-size:10px; font-weight:800; text-align:center; }
+      .shot-panel { margin-top:13px; padding:12px; border:1px solid #e0e9e3; border-radius:13px; background:#fff; }
+      .row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; border-bottom:1px solid #edf2ee; font-size:11px; }
+      .row:last-child { border-bottom:0; }
+      .check { display:grid; place-items:center; width:17px; height:17px; border:1.5px solid #a8c3b1; border-radius:50%; color:#fff; font-size:9px; }
+      .check.done { border-color:#0b8f4b; background:#0b8f4b; }
+      .list-title { display:flex; align-items:center; justify-content:space-between; margin:17px 0 3px; font-size:17px; font-weight:800; }
+      .add-row { display:flex; align-items:center; gap:8px; padding:10px; border-radius:11px; color:#08733d; background:#e8f7ee; font-size:10px; font-weight:800; }
+      .location { display:flex; align-items:center; gap:6px; margin:15px 0 11px; color:#08733d; font-size:10px; font-weight:800; }
+      .store { margin-top:9px; padding:11px; border:1px solid #e2ebe5; border-radius:12px; background:#fff; }
+      .store-head { display:flex; justify-content:space-between; gap:7px; font-size:11px; font-weight:800; }
+      .store small { display:block; margin-top:5px; color:#748178; font-size:9px; }
+      .tag { display:inline-block; margin-top:8px; padding:4px 6px; border-radius:6px; color:#877000; background:#fff5d7; font-size:9px; font-weight:800; }
+      .shot-card figcaption { max-width:280px; margin:17px auto 0; text-align:center; }
+      .shot-card h3 { margin:0 0 6px; font-size:18px; }
+      .shot-card p { margin:0; color:var(--muted); font-size:14px; line-height:1.45; }
+      section { padding:82px 0; }
+      .section-intro { max-width:650px; margin-bottom:36px; }
+      h2 { font-size:clamp(30px,4vw,43px); letter-spacing:-1.6px; margin:0 0 13px; }
+      .section-intro p { margin:0; color:var(--muted); font-size:17px; line-height:1.55; }
+      .features { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+      .feature { border:1px solid var(--line); border-radius:20px; padding:24px; background:#fff; }
+      .feature-icon { display:grid; place-items:center; width:46px; height:46px; border-radius:14px; background:var(--mint); font-size:23px; }
+      .feature h3 { margin:17px 0 8px; font-size:19px; }
+      .feature p { margin:0; line-height:1.5; color:var(--muted); font-size:15px; }
+      .how { background:#f1f9f3; }
+      .steps { display:grid; grid-template-columns:repeat(3,1fr); gap:28px; counter-reset:steps; }
+      .step { position:relative; padding-left:58px; }
+      .step::before { counter-increment:steps; content:counter(steps); display:grid; place-items:center; position:absolute; left:0; top:0; width:38px; height:38px; border-radius:50%; background:var(--green); color:#fff; font-weight:800; }
+      .step h3 { margin:8px 0 7px; font-size:18px; }
+      .step p { margin:0; color:var(--muted); line-height:1.5; }
+      .offer-band { padding:0 0 82px; background:#f1f9f3; }
+      .offer-box { padding:43px; border-radius:27px; text-align:center; color:#fff; background:linear-gradient(125deg,#056936,#0b9b51); box-shadow:0 20px 40px rgba(5,105,54,.22); }
+      .offer-box .eyebrow { background:rgba(255,255,255,.15); border-color:rgba(255,255,255,.25); color:#fff; }
+      .offer-box h2 { margin:17px auto 12px; max-width:650px; }
+      .offer-box p { max-width:580px; margin:0 auto 23px; color:#e1f7e9; line-height:1.55; }
+      .merchant-band { padding:0 0 82px; }
+      .merchant-box { padding:40px; border-radius:27px; text-align:center; background:#fff; border:1.5px solid #d7e4dc; }
+      .merchant-box .eyebrow { background:#e8f7ee; }
+      .merchant-box h2 { margin:17px auto 10px; max-width:600px; color:var(--ink); }
+      .merchant-box p { max-width:560px; margin:0 auto 23px; color:#5b6469; line-height:1.55; }
+      .cta-merchant { background:#e8f7ee; color:var(--green-dark); }
+      .fine { display:block; margin-top:13px; color:#d9f4e3; font-size:12px; }
+      footer { padding:33px 0; color:#617066; font-size:14px; }
+      .footer-row { display:flex; justify-content:space-between; gap:18px; align-items:center; }
+      @media (max-width:760px) { .nav .cta { display:none; } .hero { padding-top:28px; } .hero-grid { grid-template-columns:1fr; } .phone-wrap { margin-top:5px; } .phone { width:244px; min-height:450px; transform:none; } .screen { min-height:420px; } .features, .steps { grid-template-columns:1fr; gap:15px; } .shot-card { width:238px; } .proof-grid { grid-template-columns:1fr; gap:10px; } section, .screens { padding:58px 0; } .offer-band { padding-bottom:58px; } .offer-box { padding:32px 19px; } .footer-row { align-items:flex-start; flex-direction:column; } }
+    </style>
+  </head>
+  <body>
+    <header class="wrap nav">
+      <a class="brand" href="#inicio" aria-label="CompraInteligente, inicio"><span class="logo">✓</span>CompraInteligente</a>
+      <a class="cta" href="https://play.google.com/store/apps/details?id=com.app.compra.inteligente" aria-label="Descargar CompraInteligente en Google Play">Descargar gratis <span aria-hidden="true">→</span></a>
+    </header>
+
+    <main id="inicio">
+      <section class="hero">
+        <div class="wrap hero-grid">
+          <div>
+            <span class="eyebrow">✦ Gratis para siempre, sin letra chica</span>
+            <h1>Comprá mejor.<br />Ahorrá más.</h1>
+            <p class="lead">Organizá tu lista, encontrá ofertas cerca tuyo desde el celular y elegí con más información adónde ir a comprar.</p>
+            <a class="cta" href="https://play.google.com/store/apps/details?id=com.app.compra.inteligente">▶ Descargar en Google Play</a>
+            <p class="hero-note">✓ Gratis para siempre, sin letra chica</p>
+          </div>
+          <div class="phone-wrap" aria-label="Vista previa ilustrativa de CompraInteligente">
+            <div class="phone"><div class="screen"><div class="notch"></div><div class="app-top"><span>21:04</span><span>● ● ●</span></div><h3 class="app-title">Hola, Daniel</h3><p class="app-sub">Vamos a ahorrar en tus compras de hoy</p><div class="app-card"><strong>¿Qué necesitás hoy?</strong><span>Armá tu lista y encontrá las mejores ofertas.</span><div class="app-button">Armar mi compra&nbsp; →</div></div><div class="mini-list"><b>✓ Tu lista</b><div class="progress"><span></span></div><small>3 de 5 productos agregados</small></div><div class="offer"><i>🏷</i><span><b>Ofertas cerca tuyo</b><br />Compará antes de salir.</span></div></div></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="proof"><div class="wrap proof-grid"><div><b>Lista inteligente</b><span>Todo lo que necesitás, ordenado</span></div><div><b>Ofertas cercanas</b><span>Comercios y mayoristas cerca tuyo</span></div><div><b>Más control</b><span>Decidí dónde te conviene comprar</span></div></div></section>
+
+      <section class="screens">
+        <div class="wrap">
+          <div class="section-intro"><h2>Conocé la app antes de descargarla</h2><p>Estas vistas ilustran las pantallas principales con las que vas a planificar tu compra, ordenar tu lista y consultar ofertas. Deslizá para ver más →</p></div>
+          <div class="shot-grid">
+            <figure class="shot-card"><div class="shot-frame"><div class="shot-screen"><div class="shot-notch"></div><div class="status"><span>21:04</span><span>● ● ●</span></div><h3 class="shot-greeting">Hola, Daniel 👋</h3><p class="shot-label">Vamos a ahorrar en tus compras de hoy</p><div class="shot-hero"><b>¿Qué necesitás hoy?</b><span>Armá tu lista y encontrá las mejores ofertas.</span><div class="fake-button">Armar mi compra&nbsp; →</div></div><div class="shot-panel"><b style="font-size:12px">✓ Tu lista</b><div class="progress"><span></span></div><small>3 de 5 productos agregados</small></div></div></div><figcaption><h3>Inicio</h3><p>Empezá tu compra desde una pantalla simple y clara.</p></figcaption></figure>
+            <figure class="shot-card"><div class="shot-frame"><div class="shot-screen"><div class="shot-notch"></div><div class="status"><span>21:04</span><span>● ● ●</span></div><div class="list-title"><span>Mi lista</span><span style="color:#0b8f4b;font-size:11px">Editar</span></div><p class="shot-label">5 productos · 2 pendientes</p><div class="shot-panel"><div class="row"><span style="display:flex;gap:8px;align-items:center"><i class="check done">✓</i> Leche entera</span><b style="color:#08733d">$ 1.290</b></div><div class="row"><span style="display:flex;gap:8px;align-items:center"><i class="check"></i> Yerba mate</span><b>$ 2.550</b></div><div class="row"><span style="display:flex;gap:8px;align-items:center"><i class="check"></i> Pan lactal</span><b>$ 1.780</b></div></div><div class="add-row" style="margin-top:13px">＋ Agregar producto a la lista</div></div></div><figcaption><h3>Lista de compras</h3><p>Tené cada producto a mano y marcá lo que ya llevaste.</p></figcaption></figure>
+            <figure class="shot-card"><div class="shot-frame"><div class="shot-screen"><div class="shot-notch"></div><div class="status"><span>21:04</span><span>● ● ●</span></div><h3 class="shot-greeting">Ofertas cerca tuyo</h3><div class="location">● Mar del Plata · 3 km</div><div class="store"><div class="store-head"><span>Supermercado Central</span><span style="color:#08733d">0,6 km</span></div><small>Av. Independencia 1850</small><span class="tag">Leche 20% menos</span></div><div class="store"><div class="store-head"><span>Mayorista del Sur</span><span style="color:#08733d">1,4 km</span></div><small>Juan B. Justo 2240</small><span class="tag">Ahorro en almacén</span></div><div class="store"><div class="store-head"><span>Mercado Barrial</span><span style="color:#08733d">2,1 km</span></div><small>San Juan 1375</small><span class="tag">Oferta destacada</span></div></div></div><figcaption><h3>Ofertas cercanas</h3><p>Consultá comercios y promociones según tu ubicación.</p></figcaption></figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="wrap">
+        <div class="section-intro"><h2>Tu compra, más simple</h2><p>CompraInteligente reúne las herramientas necesarias para planificar cada salida y aprovechar mejor tu presupuesto.</p></div>
+        <div class="features">
+          <article class="feature"><div class="feature-icon">📝</div><h3>Armá tu lista</h3><p>Agregá productos por categoría, marcá lo que ya compraste y mantené todo ordenado.</p></article>
+          <article class="feature"><div class="feature-icon">📍</div><h3>Encontrá cerca</h3><p>Consultá supermercados, comercios y mayoristas según tu ubicación.</p></article>
+          <article class="feature"><div class="feature-icon">💸</div><h3>Elegí mejor</h3><p>Revisá ofertas disponibles y llevá tu lista al comercio que te resulte más conveniente.</p></article>
+        </div>
+      </section>
+
+      <section class="how"><div class="wrap"><div class="section-intro"><h2>Empezá en minutos</h2><p>Una experiencia diseñada para que organizar la compra sea una tarea rápida, no una preocupación más.</p></div><div class="steps"><div class="step"><h3>Descargá la app</h3><p>Instalá CompraInteligente desde Google Play en tu teléfono Android.</p></div><div class="step"><h3>Armá tu lista</h3><p>Sumá lo que necesitás para tu hogar con pocos toques.</p></div><div class="step"><h3>Compará y comprá</h3><p>Revisá las opciones cercanas y salí a comprar con más información.</p></div></div></div></section>
+
+      <section class="offer-band"><div class="wrap"><div class="offer-box"><span class="eyebrow">Sin costo, sin trampa</span><h2>CompraInteligente es gratis para siempre.</h2><p>Organizá tu lista y explorá ofertas cercanas sin pagar nada, hoy y después de hoy.</p><a class="cta-light" href="https://play.google.com/store/apps/details?id=com.app.compra.inteligente">Descargar en Google Play <span aria-hidden="true">→</span></a><small class="fine">La ficha de Google Play estará disponible una vez publicada la aplicación.</small></div></div></section>
+
+      <section class="merchant-band"><div class="wrap"><div class="merchant-box"><span class="eyebrow">Para comercios</span><h2>¿Tenés un comercio? Sumate gratis.</h2><p>Cargá tu local y tus ofertas sin costo, y aparecé ante gente de tu zona que está buscando precios en este momento. Sumarte no cuesta nada — más adelante vas a poder pagar para destacar una oferta puntual si querés, pero nunca por estar.</p><a class="cta cta-merchant" href="https://play.google.com/store/apps/details?id=com.app.compra.inteligente">Cargar mi comercio <span aria-hidden="true">→</span></a></div></div></section>
+    </main>
+
+    <footer><div class="wrap footer-row"><span class="brand"><span class="logo">✓</span>CompraInteligente</span><span>Comprá con más información. Ahorrá a tu manera.</span></div></footer>
+  </body>
+</html>

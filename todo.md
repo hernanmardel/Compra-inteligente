@@ -25,7 +25,6 @@
 - [x] Mostrar tipo de comercio (supermercado, mayorista, almacén, etc.)
 - [x] Ranking de precios más bajos según distancia y ahorro
 - [x] Indicador de carga de ubicación en la pantalla Ofertas
-- [ ] Integración con OpenAI: API Key configurada y validada
 - [x] Endpoint de asistente de compras inteligente en el servidor
 - [x] Pantalla de chat con el asistente AI
 - [x] Sugerencias inteligentes basadas en la lista de compras
@@ -78,3 +77,8 @@
 - [x] Hacer seleccionables las ofertas de Inicio con una ficha simplificada para agregar a la lista o ir al comercio
 - [x] Rediseñar Inicio con una acción principal clara para armar la compra y accesos rápidos a Lista y Ofertas
 - [x] Preparar un paquete descargable del proyecto para continuar el desarrollo en otro entorno
+- [x] Evaluar e implementar una fuente sostenible de productos y precios actualizados de comercios (SEPA/Precios Claros, sincronización diaria automática por provincia)
+- [x] Crear landing (versión app + versión HTML estática) con promoción de lanzamiento de 3 meses gratis y enlace a Google Play
+- [x] Construir el portal de comercios con perfil, catálogo, precios, ofertas y checklist de publicación
+- [ ] Conectar el portal de comercios a un backend con hosting real: hoy los datos que carga un comerciante quedan solo en su propio celular (AsyncStorage), no llegan a otros usuarios ni aparecen en Ofertas/Mapa
+- [ ] Migrar esquema de base de datos a Postgres/Supabase (o alternativa con hosting) para sostener precios de comercios + portal
