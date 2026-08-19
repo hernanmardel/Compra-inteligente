@@ -1,4 +1,4 @@
-import { supabase, isSupabaseConfigured, ensureUserId } from "@/lib/supabase-client";
+import { supabase, isSupabaseConfigured } from "@/lib/supabase-client";
 
 /**
  * Portal de comercios — migrado de AsyncStorage (local al celular) a Supabase (compartido).
@@ -29,8 +29,6 @@ export type MerchantCatalogItem = {
   name: string;
   category: string;
   barcode: string;
-  unitType: "unidad" | "gramos" | "kilo";
-  baseQuantity: number;
   regularPrice: number;
   updatedAt: string;
 };
@@ -40,7 +38,6 @@ export type MerchantOffer = {
   productId: string;
   originalPrice: number;
   offerPrice: number;
-  quantity: number;
   startsAt: string;
   endsAt: string;
   stock: string;
@@ -48,17 +45,10 @@ export type MerchantOffer = {
   updatedAt: string;
 };
 
-export type MerchantReferralStats = {
-  code: string;          // el mismo claim_code, ya reclamado - sirve como código de invitación
-  total: number;         // clientes nuevos sumados hasta ahora
-  progressToNext: number; // 0-9, cuántos lleva desde el último hito de 10
-};
-
 export type MerchantPortalState = {
   profile: MerchantProfile;
   catalog: MerchantCatalogItem[];
   offers: MerchantOffer[];
-  referrals: MerchantReferralStats | null; // null hasta que el comercio tenga claim_code
 };
 
 const emptyProfile: MerchantProfile = {
@@ -74,7 +64,6 @@ const emptyState: MerchantPortalState = {
   profile: emptyProfile,
   catalog: [],
   offers: [],
-  referrals: null,
 };
 
 function toCents(pesos: number): number {
@@ -85,6 +74,32 @@ function fromCents(cents: number | null | undefined): number {
   return (cents ?? 0) / 100;
 }
 
+function assertConfigured() {
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      "El portal de comercios necesita Supabase configurado (ver .env.example). " +
+      "Sin eso no hay dónde guardar lo que cargues."
+    );
+  }
+}
+
+/** Devuelve el user id de la sesión actual, creando una sesión anónima si hace falta. */
+async function ensureUserId(): Promise<string> {
+  assertConfigured();
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user?.id) {
+    return sessionData.session.user.id;
+  }
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error || !data.user) {
+    throw new Error(
+      `No se pudo crear una sesión para el portal de comercios: ${error?.message ?? "sin usuario"}. ` +
+      "Si el error menciona 'anonymous sign-ins', hay que habilitarlos en el panel de Supabase " +
+      "(Authentication → Settings → Allow anonymous sign-ins)."
+    );
+  }
+  return data.user.id;
+}
 
 /** Busca el comercio del usuario actual (asume 1 comercio por sesión, como hoy). */
 async function getOwnStoreId(): Promise<string | null> {
@@ -112,17 +127,12 @@ export async function getMerchantPortalState(): Promise<MerchantPortalState> {
   if (storeError) throw storeError;
   if (!store) return emptyState;
 
-  const [{ data: catalogRows, error: catalogError }, { data: offerRows, error: offersError }, referralCount] = await Promise.all([
+  const [{ data: catalogRows, error: catalogError }, { data: offerRows, error: offersError }] = await Promise.all([
     supabase.from("store_catalog_items").select("*").eq("store_id", store.id).order("updated_at", { ascending: false }),
     supabase.from("store_offers").select("*").eq("store_id", store.id).order("updated_at", { ascending: false }),
-    store.claim_code
-      ? supabase.from("store_referrals").select("id", { count: "exact", head: true }).eq("store_id", store.id)
-      : Promise.resolve({ count: 0 }),
   ]);
   if (catalogError) throw catalogError;
   if (offersError) throw offersError;
-
-  const total = referralCount?.count ?? 0;
 
   return {
     profile: {
@@ -133,16 +143,11 @@ export async function getMerchantPortalState(): Promise<MerchantPortalState> {
       phone: store.phone ?? "",
       schedule: store.schedule ?? "",
     },
-    referrals: store.claim_code
-      ? { code: store.claim_code, total, progressToNext: total % 10 }
-      : null,
     catalog: (catalogRows ?? []).map((r) => ({
       id: r.id,
       name: r.name,
       category: r.category ?? "",
       barcode: r.barcode ?? "",
-      unitType: r.unit_type ?? "unidad",
-      baseQuantity: r.base_quantity ?? 1,
       regularPrice: fromCents(r.regular_price),
       updatedAt: r.updated_at,
     })),
@@ -151,7 +156,6 @@ export async function getMerchantPortalState(): Promise<MerchantPortalState> {
       productId: r.catalog_item_id,
       originalPrice: fromCents(r.original_price),
       offerPrice: fromCents(r.offer_price),
-      quantity: r.quantity ?? 1,
       startsAt: r.starts_at,
       endsAt: r.ends_at,
       stock: r.stock ?? "",
@@ -200,8 +204,6 @@ export async function addMerchantCatalogItem(
     name: item.name,
     category: item.category,
     barcode: item.barcode,
-    unit_type: item.unitType,
-    base_quantity: item.baseQuantity,
     regular_price: toCents(item.regularPrice),
     updated_at: new Date().toISOString(),
   });
@@ -229,7 +231,6 @@ export async function addMerchantOffer(
     catalog_item_id: offer.productId,
     original_price: toCents(offer.originalPrice),
     offer_price: toCents(offer.offerPrice),
-    quantity: offer.quantity,
     starts_at: offer.startsAt,
     ends_at: offer.endsAt,
     stock: offer.stock,
@@ -252,20 +253,6 @@ export async function setMerchantOfferActive(id: string, active: boolean) {
 
 export async function removeMerchantOffer(id: string) {
   const { error } = await supabase.from("store_offers").delete().eq("id", id);
-  if (error) throw error;
-  return getMerchantPortalState();
-}
-
-/**
- * Vincula al dispositivo actual un comercio que ya fue cargado por SQL durante el
- * relevamiento (sin dueño todavía), usando el código corto que se le entregó al
- * comerciante en persona (ej. "CI-4F7B"). Ver supabase/migrations/0002_claim_code.sql.
- */
-export async function claimStoreByCode(claimCode: string) {
-  await ensureUserId();
-  const { error } = await supabase.rpc("claim_store", {
-    p_claim_code: claimCode.trim().toUpperCase(),
-  });
   if (error) throw error;
   return getMerchantPortalState();
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   getLocation,
   startWatchingLocation,
@@ -9,7 +9,7 @@ import {
 } from "@/lib/location-service";
 import { trpc } from "@/lib/trpc";
 
-export type LocationStatus = "loading" | "located" | "error";
+export type LocationStatus = "idle" | "loading" | "located" | "error";
 
 export interface UseUserLocationResult {
   status: LocationStatus;
@@ -41,16 +41,21 @@ export function locationErrorMessage(reason: LocationFailureReason): { label: st
 
 /**
  * Estado único de ubicación + ciudad, compartido entre Inicio, Ofertas y Mapa.
- * Colapsa a 3 estados visuales (loading / located / error) en vez de las 4 variantes
- * ad-hoc que tenía cada pantalla, para evitar el parpadeo entre "Buscando GPS" →
- * "Detectando..." → ciudad que se veía en los primeros segundos.
+ * Colapsa a 4 estados visuales (idle / loading / located / error).
+ *
+ * `autoRequest` (default true, igual que antes): si es false, no dispara el
+ * pedido de permiso de GPS del sistema apenas se monta - se queda en "idle"
+ * hasta que el componente decida pedirlo (ver Ofertas: primero se explica
+ * por qué hace falta la ubicación, y recién ahí se llama a retry()).
  */
-export function useUserLocation(): UseUserLocationResult {
+export function useUserLocation(options?: { autoRequest?: boolean }): UseUserLocationResult {
+  const autoRequest = options?.autoRequest ?? true;
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [currentCity, setCurrentCity] = useState<string | null>(null);
   const [currentRegion, setCurrentRegion] = useState<string | null>(null);
-  const [status, setStatus] = useState<LocationStatus>("loading");
+  const [status, setStatus] = useState<LocationStatus>(autoRequest ? "loading" : "idle");
   const [failureReason, setFailureReason] = useState<LocationFailureReason>(null);
+  const watchRef = useRef<{ remove: () => void } | null>(null);
 
   const geocodeQuery = trpc.places.reverseGeocode.useQuery(
     { lat: userLocation?.latitude ?? 0, lng: userLocation?.longitude ?? 0 },
@@ -66,37 +71,44 @@ export function useUserLocation(): UseUserLocationResult {
     }
   }, [geocodeQuery.data]);
 
+  const startWatch = useCallback(async () => {
+    if (watchRef.current) return;
+    watchRef.current = await startWatchingLocation((newLoc) => {
+      setUserLocation(newLoc);
+    });
+  }, []);
+
   useEffect(() => {
     let mounted = true;
-    let unsubscribe: (() => void) | undefined;
-    let watch: { remove: () => void } | null = null;
 
-    (async () => {
-      const loc = await getLocation();
-      if (!mounted) return;
-      if (loc) {
-        setUserLocation(loc);
-        setStatus("located");
-      } else {
-        setFailureReason(getLastLocationFailure());
-        setStatus("error");
-      }
+    const unsubscribe = subscribeLocation((newLoc) => {
+      setUserLocation(newLoc);
+      setStatus("located");
+    });
 
-      unsubscribe = subscribeLocation((newLoc) => {
-        setUserLocation(newLoc);
-        setStatus("located");
-      });
-      watch = await startWatchingLocation((newLoc) => {
-        if (mounted) setUserLocation(newLoc);
-      });
-    })();
+    if (autoRequest) {
+      (async () => {
+        setStatus("loading");
+        const loc = await getLocation();
+        if (!mounted) return;
+        if (loc) {
+          setUserLocation(loc);
+          setStatus("located");
+        } else {
+          setFailureReason(getLastLocationFailure());
+          setStatus("error");
+        }
+        await startWatch();
+      })();
+    }
 
     return () => {
       mounted = false;
-      unsubscribe?.();
-      watch?.remove();
+      unsubscribe();
+      watchRef.current?.remove();
+      watchRef.current = null;
     };
-  }, []);
+  }, [autoRequest, startWatch]);
 
   const retry = useCallback(async () => {
     setStatus("loading");
@@ -108,7 +120,8 @@ export function useUserLocation(): UseUserLocationResult {
       setFailureReason(getLastLocationFailure());
       setStatus("error");
     }
-  }, []);
+    await startWatch();
+  }, [startWatch]);
 
   return { status, userLocation, currentCity, currentRegion, failureReason, retry };
 }

@@ -16,6 +16,7 @@ import {
   searchAllNearbyPlaces as searchOSMPlaces,
   getPlaceDetails as getOSMPlaceDetails,
   reverseGeocode,
+  reverseGeocodeAddress,
   calculateDistance as osmCalculateDistance,
 } from "./_core/openstreetmap";
 import {
@@ -259,6 +260,17 @@ export const appRouter = router({
 
         // Fallback a Nominatim
         return await reverseGeocode(input.lat, input.lng);
+      }),
+
+    // Dirección completa (calle + altura) para autocompletar el formulario
+    // de ofertas comunitarias con foto
+    reverseGeocodeAddress: publicProcedure
+      .input(z.object({
+        lat: z.number(),
+        lng: z.number(),
+      }))
+      .query(async ({ input }) => {
+        return { address: await reverseGeocodeAddress(input.lat, input.lng) };
       }),
 
     // Buscar comercios de múltiples tipos a la vez (endpoint principal)

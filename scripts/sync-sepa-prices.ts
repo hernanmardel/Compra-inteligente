@@ -121,8 +121,15 @@ function parseRow(row: string[], map: CsvColumnMap, reportedDate: string): Parse
   };
 }
 
+// Muchos sitios gubernamentales (CKAN incluido) devuelven 403 a pedidos sin
+// User-Agent, tratándolos como bots. Con headers de navegador normal, pasan.
+const FETCH_HEADERS = {
+  "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+  "Accept": "application/json, */*",
+};
+
 async function findLatestZipUrl(): Promise<{ url: string; date: string }> {
-  const res = await fetch(CKAN_PACKAGE_URL);
+  const res = await fetch(CKAN_PACKAGE_URL, { headers: FETCH_HEADERS });
   if (!res.ok) throw new Error(`No se pudo consultar el catálogo CKAN: ${res.status}`);
   const data = await res.json();
   const resources: any[] = data?.result?.resources ?? [];
@@ -168,7 +175,7 @@ async function main() {
   const { url, date } = await findLatestZipUrl();
   console.log(`[sync-sepa] Descargando: ${url}`);
 
-  const zipRes = await fetch(url);
+  const zipRes = await fetch(url, { headers: FETCH_HEADERS });
   if (!zipRes.ok || !zipRes.body) throw new Error(`Falló la descarga del ZIP: ${zipRes.status}`);
   const zipBuffer = Buffer.from(await zipRes.arrayBuffer());
 

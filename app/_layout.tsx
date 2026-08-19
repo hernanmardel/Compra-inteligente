@@ -90,6 +90,7 @@ export default function RootLayout() {
             <Stack.Screen name="oauth/callback" />
             <Stack.Screen name="landing" />
             <Stack.Screen name="portal-comercios" />
+            <Stack.Screen name="cargar-oferta" />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>

@@ -24,6 +24,7 @@
     "@react-navigation/bottom-tabs": "^7.8.12",
     "@react-navigation/elements": "^2.9.2",
     "@react-navigation/native": "^7.1.25",
+    "@supabase/supabase-js": "^2.45.4",
     "@tanstack/react-query": "^5.90.12",
     "@trpc/client": "11.7.2",
     "@trpc/react-query": "11.7.2",
@@ -40,6 +41,7 @@
     "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
     "expo-image": "~3.0.11",
+    "expo-image-picker": "~17.0.11",
     "expo-keep-awake": "~15.0.8",
     "expo-linking": "~8.0.10",
     "expo-location": "~19.0.8",
@@ -65,13 +67,12 @@
     "react-native-safe-area-context": "~5.6.2",
     "react-native-screens": "~4.16.0",
     "react-native-svg": "15.12.1",
+    "react-native-url-polyfill": "^2.0.0",
     "react-native-web": "~0.21.2",
     "react-native-worklets": "0.5.1",
     "superjson": "^1.13.3",
     "tailwind-merge": "^2.6.0",
-    "zod": "^4.2.1",
-    "@supabase/supabase-js": "^2.45.4",
-    "react-native-url-polyfill": "^2.0.0"
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@expo/ngrok": "^4.1.3",
@@ -80,8 +81,10 @@
     "@types/node": "^22.19.3",
     "@types/qrcode": "^1.5.6",
     "@types/react": "~19.1.17",
+    "@types/unzipper": "^0.10.11",
     "concurrently": "^9.2.1",
     "cross-env": "^7.0.3",
+    "csv-parse": "^5.6.0",
     "drizzle-kit": "^0.31.8",
     "esbuild": "^0.25.12",
     "eslint": "^9.39.2",
@@ -91,10 +94,8 @@
     "tailwindcss": "^3.4.17",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
-    "vitest": "^2.1.9",
-    "csv-parse": "^5.6.0",
     "unzipper": "^0.12.3",
-    "@types/unzipper": "^0.10.11"
+    "vitest": "^2.1.9"
   },
   "packageManager": "pnpm@9.12.0"
 }

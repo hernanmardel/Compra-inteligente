@@ -30,3 +30,33 @@ export const supabase = createClient(
     },
   }
 );
+
+function assertConfigured() {
+  if (!isSupabaseConfigured) {
+    throw new Error(
+      "Esta función necesita Supabase configurado (ver .env.example). Sin eso no hay dónde guardar lo que cargues."
+    );
+  }
+}
+
+/**
+ * Devuelve el user id de la sesión actual, creando una sesión anónima si hace falta.
+ * Compartido por todas las funciones que escriben en Supabase (portal de comercios,
+ * ofertas comunitarias, ranking) para no repetir la misma lógica de login anónimo.
+ */
+export async function ensureUserId(): Promise<string> {
+  assertConfigured();
+  const { data: sessionData } = await supabase.auth.getSession();
+  if (sessionData.session?.user?.id) {
+    return sessionData.session.user.id;
+  }
+  const { data, error } = await supabase.auth.signInAnonymously();
+  if (error || !data.user) {
+    throw new Error(
+      `No se pudo crear una sesión: ${error?.message ?? "sin usuario"}. ` +
+      "Si el error menciona 'anonymous sign-ins', hay que habilitarlos en el panel de Supabase " +
+      "(Authentication → Settings → Allow anonymous sign-ins)."
+    );
+  }
+  return data.user.id;
+}

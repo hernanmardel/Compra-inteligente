@@ -29,26 +29,30 @@ import { getShoppingListItems, saveShoppingListItems } from "@/constants/shoppin
 import { archivePurchase } from "@/constants/purchases-store";
 import { useUserLocation } from "@/hooks/use-user-location";
 import { useSepaProducts, type SepaRecord } from "@/hooks/use-sepa-products";
+import { inferProductCategory } from "@/constants/product-category-inference";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useFocusEffect } from "@react-navigation/native";
 
-let counter = 0;
-const genId = () => `item-${++counter}`;
+// Antes esto era un contador en memoria (item-1, item-2...) que se reiniciaba en cada
+// reinicio de la app, mientras los productos ya guardados quedaban persistidos con esos
+// mismos IDs - así, tarde o temprano, un producto nuevo repetía el ID de uno viejo y
+// rompía la lista (FlatList con keys duplicadas). Timestamp + random nunca colisiona.
+const genId = () => `item-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 // Categorized product groups with emoji category icons
-const QUICK_CATEGORIES = [
-  { label: "Lácteos", icon: "🥛", products: PRODUCTS.filter((p) => p.category === "Lácteos") },
-  { label: "Pan", icon: "🍞", products: PRODUCTS.filter((p) => p.category === "Panadería") },
-  { label: "Frutas", icon: "🍎", products: PRODUCTS.filter((p) => p.category === "Frutas y Verduras") },
-  { label: "Carnes", icon: "🍗", products: PRODUCTS.filter((p) => p.category === "Carnes") },
-  { label: "Almacén", icon: "🍚", products: PRODUCTS.filter((p) => p.category === "Almacén") },
-  { label: "Bebidas", icon: "☕", products: PRODUCTS.filter((p) => p.category === "Bebidas") },
-  { label: "Limpieza", icon: "🧹", products: PRODUCTS.filter((p) => p.category === "Limpieza") },
-  { label: "Hogar", icon: "🧻", products: PRODUCTS.filter((p) => p.category === "Hogar") },
-  { label: "Snacks", icon: "🍪", products: PRODUCTS.filter((p) => p.category === "Snacks") },
-  { label: "Conservas", icon: "🐟", products: PRODUCTS.filter((p) => p.category === "Conservas") },
-  { label: "Proteínas", icon: "🥩", products: PRODUCTS.filter((p) => p.category === "Proteínas") },
+const QUICK_CATEGORY_DEFS = [
+  { label: "Lácteos", icon: "🥛", category: "Lácteos" },
+  { label: "Pan", icon: "🍞", category: "Panadería" },
+  { label: "Frutas", icon: "🍎", category: "Frutas y Verduras" },
+  { label: "Carnes", icon: "🍗", category: "Carnes" },
+  { label: "Almacén", icon: "🍚", category: "Almacén" },
+  { label: "Bebidas", icon: "☕", category: "Bebidas" },
+  { label: "Limpieza", icon: "🧹", category: "Limpieza" },
+  { label: "Hogar", icon: "🧻", category: "Hogar" },
+  { label: "Snacks", icon: "🍪", category: "Snacks" },
+  { label: "Conservas", icon: "🐟", category: "Conservas" },
+  { label: "Proteínas", icon: "🥩", category: "Proteínas" },
 ];
 
 const ALL_CATEGORIES = [
@@ -67,6 +71,8 @@ const ICON_OPTIONS = [
 /**
  * Suma al catálogo los productos reales de SEPA de la provincia del usuario, sin duplicar
  * (por productId de SEPA) y sin pisar los productos default/personalizados existentes.
+ * La categoría/ícono se infiere del nombre real del producto (SEPA solo trae el nombre
+ * de la cadena que lo vendió, no una categoría de góndola útil para agrupar).
  */
 function mergeSepaProducts(base: Product[], sepaRecords: SepaRecord[]): Product[] {
   if (sepaRecords.length === 0) return base;
@@ -80,13 +86,8 @@ function mergeSepaProducts(base: Product[], sepaRecords: SepaRecord[]): Product[
     const id = `sepa-${record.productId}`;
     if (seenSepaIds.has(id) || existingIds.has(id)) continue;
     seenSepaIds.add(id);
-    sepaProducts.push({
-      id,
-      name: record.productName,
-      category: record.chain || "SEPA",
-      unit: "un",
-      icon: "🏷️",
-    });
+    const { category, icon, unit } = inferProductCategory(record.productName);
+    sepaProducts.push({ id, name: record.productName, category, unit, icon });
   }
 
   return [...base, ...sepaProducts];
@@ -132,7 +133,25 @@ export default function ListaScreen() {
 
   const loadShoppingList = useCallback(async () => {
     const savedItems = await getShoppingListItems();
-    setItems(savedItems);
+
+    // Autocorrección: si quedaron guardados productos con id repetido de la versión
+    // vieja del generador de IDs (ver genId más arriba), se les asigna uno nuevo acá,
+    // una sola vez, para no romper más la lista.
+    const seenIds = new Set<string>();
+    let hadDuplicates = false;
+    const dedupedItems = savedItems.map((item) => {
+      if (seenIds.has(item.id)) {
+        hadDuplicates = true;
+        return { ...item, id: genId() };
+      }
+      seenIds.add(item.id);
+      return item;
+    });
+
+    setItems(dedupedItems);
+    if (hadDuplicates) {
+      await saveShoppingListItems(dedupedItems);
+    }
   }, []);
 
   useEffect(() => {
@@ -150,6 +169,18 @@ export default function ListaScreen() {
     setItems(nextItems);
     void saveShoppingListItems(nextItems);
   };
+
+  // Categorías rápidas armadas en vivo con TODO el catálogo (mock + SEPA + personalizados),
+  // no solo los productos de ejemplo - antes esto quedaba fijo al cargar el archivo.
+  const quickCategories = useMemo(
+    () =>
+      QUICK_CATEGORY_DEFS.map((def) => ({
+        label: def.label,
+        icon: def.icon,
+        products: allProducts.filter((p) => p.category === def.category),
+      })),
+    [allProducts],
+  );
 
   // Filtered suggestions
   const suggestions = useMemo(() => {
@@ -293,7 +324,7 @@ export default function ListaScreen() {
     const isCustom = !item.product.id.startsWith("p");
     return (
       <View
-        className="flex-row items-center px-4 py-3.5 rounded-2xl mb-2.5"
+        className="rounded-2xl mb-2.5 px-4 py-3.5"
         style={{
           backgroundColor: colors.surface,
           borderWidth: 1.5,
@@ -302,70 +333,73 @@ export default function ListaScreen() {
           transform: [{ scale: item.checked ? 0.98 : 1 }],
         }}
       >
-        {/* Checkbox */}
-        <Pressable onPress={() => toggleCheck(item.id)} style={{ padding: 4 }}>
-          <View
-            className="w-7 h-7 rounded-full items-center justify-center"
-            style={{
-              backgroundColor: item.checked ? colors.success : "transparent",
-              borderWidth: 2.5,
-              borderColor: item.checked ? colors.success : colors.border,
-            }}
+        {/* Nombre completo, en su propia línea */}
+        <Pressable onPress={() => openEditFor(item.product, item.estimatedPrice)} style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+          <Text
+            className="text-base font-semibold text-foreground"
+            style={{ textDecorationLine: item.checked ? "line-through" : "none", flexShrink: 1 }}
           >
-            {item.checked && <Text style={{ color: "white", fontSize: 15, fontWeight: "bold", marginTop: -1 }}>✓</Text>}
-          </View>
-        </Pressable>
-
-        {/* Icon + Name */}
-        <Pressable onPress={() => openEditFor(item.product, item.estimatedPrice)} style={{ marginLeft: 10, flexDirection: "row", alignItems: "center", flex: 1 }}>
-          <Text style={{ fontSize: 26 }}>{item.product.icon}</Text>
-          <View className="flex-1 ml-3">
-            <Text
-              className="text-base font-semibold text-foreground"
-              style={{ textDecorationLine: item.checked ? "line-through" : "none" }}
-              numberOfLines={1}
-            >
-              {item.product.name}
-            </Text>
-            <Text className="text-xs" style={{ color: colors.primary, fontWeight: '600' }}>
-              {formatPrice(item.estimatedPrice * item.quantity)}
-              <Text className="text-muted" style={{ fontWeight: '400' }}> ({formatPrice(item.estimatedPrice)} x{item.quantity})</Text>
-            </Text>
-          </View>
+            {item.product.name}
+          </Text>
           {isCustom && (
-            <View className="rounded-full px-2 py-0.5 mr-2" style={{ backgroundColor: colors.primary + '15' }}>
+            <View className="rounded-full px-2 py-0.5" style={{ backgroundColor: colors.primary + '15', flexShrink: 0 }}>
               <Text style={{ fontSize: 9, color: colors.primary, fontWeight: '600' }}>CUSTOM</Text>
             </View>
           )}
         </Pressable>
 
-        {/* Quantity */}
-        <View className="flex-row items-center gap-1.5 mr-2">
-          <Pressable
-            onPress={() => updateQuantity(item.id, -1)}
-            style={({ pressed }) => [
-              styles.qtyBtn,
-              { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Text className="text-lg font-bold" style={{ color: colors.foreground, marginBottom: -2 }}>−</Text>
+        <View className="flex-row items-center">
+          {/* Checkbox */}
+          <Pressable onPress={() => toggleCheck(item.id)} style={{ padding: 4 }}>
+            <View
+              className="w-7 h-7 rounded-full items-center justify-center"
+              style={{
+                backgroundColor: item.checked ? colors.success : "transparent",
+                borderWidth: 2.5,
+                borderColor: item.checked ? colors.success : colors.border,
+              }}
+            >
+              {item.checked && <Text style={{ color: "white", fontSize: 15, fontWeight: "bold", marginTop: -1 }}>✓</Text>}
+            </View>
           </Pressable>
-          <Text className="text-base font-bold text-foreground w-7 text-center">{item.quantity}</Text>
-          <Pressable
-            onPress={() => updateQuantity(item.id, 1)}
-            style={({ pressed }) => [
-              styles.qtyBtn,
-              { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
-            ]}
-          >
-            <Text className="text-lg font-bold" style={{ color: colors.foreground, marginBottom: -2 }}>+</Text>
+
+          {/* Icon + Price */}
+          <Pressable onPress={() => openEditFor(item.product, item.estimatedPrice)} style={{ marginLeft: 10, flexDirection: "row", alignItems: "center", flex: 1, minWidth: 0 }}>
+            <Text style={{ fontSize: 24 }}>{item.product.icon}</Text>
+            <Text className="text-xs ml-2" style={{ color: colors.primary, fontWeight: '600', flexShrink: 1 }} numberOfLines={1}>
+              {formatPrice(item.estimatedPrice * item.quantity)}
+              <Text className="text-muted" style={{ fontWeight: '400' }}> ({formatPrice(item.estimatedPrice)} x{item.quantity})</Text>
+            </Text>
+          </Pressable>
+
+          {/* Quantity */}
+          <View className="flex-row items-center gap-1.5 mr-2">
+            <Pressable
+              onPress={() => updateQuantity(item.id, -1)}
+              style={({ pressed }) => [
+                styles.qtyBtn,
+                { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text className="text-lg font-bold" style={{ color: colors.foreground, marginBottom: -2 }}>−</Text>
+            </Pressable>
+            <Text className="text-base font-bold text-foreground w-7 text-center">{item.quantity}</Text>
+            <Pressable
+              onPress={() => updateQuantity(item.id, 1)}
+              style={({ pressed }) => [
+                styles.qtyBtn,
+                { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, opacity: pressed ? 0.7 : 1 },
+              ]}
+            >
+              <Text className="text-lg font-bold" style={{ color: colors.foreground, marginBottom: -2 }}>+</Text>
+            </Pressable>
+          </View>
+
+          {/* Delete */}
+          <Pressable onPress={() => removeItem(item.id)} style={{ padding: 8 }}>
+            <Text style={{ fontSize: 18, color: colors.error, fontWeight: '600' }}>✕</Text>
           </Pressable>
         </View>
-
-        {/* Delete */}
-        <Pressable onPress={() => removeItem(item.id)} style={{ padding: 8 }}>
-          <Text style={{ fontSize: 18, color: colors.error, fontWeight: '600' }}>✕</Text>
-        </Pressable>
       </View>
     );
   };
@@ -550,7 +584,7 @@ export default function ListaScreen() {
           <Text className="text-xs font-semibold text-muted uppercase tracking-wider mb-2">Agregar por categoría</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
             <View className="flex-row gap-2 pr-4">
-              {QUICK_CATEGORIES.map((cat) => (
+              {quickCategories.map((cat) => (
                 <Pressable
                   key={cat.label}
                   onPress={() => {
@@ -594,7 +628,7 @@ export default function ListaScreen() {
               </View>
               <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 180 }}>
                 <View className="px-3 py-1">
-                  {QUICK_CATEGORIES.find(c => c.label === expandedCategory)?.products.map((product) => {
+                  {quickCategories.find(c => c.label === expandedCategory)?.products.map((product) => {
                     const alreadyInList = items.some(i => i.product.id === product.id && !i.checked);
                     return (
                       <Pressable

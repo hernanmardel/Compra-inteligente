@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Text,
   View,
+  Image,
   TouchableOpacity,
   ActivityIndicator,
   RefreshControl,
@@ -10,7 +11,10 @@ import {
   Platform,
   StyleSheet,
   Modal,
+  Animated,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { router } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { useUserLocation } from "@/hooks/use-user-location";
@@ -25,7 +29,9 @@ import {
   type Product,
 } from "@/constants/mock-data";
 import { addCustomProduct, getAllProducts } from "@/constants/product-store";
+import { inferProductCategory } from "@/constants/product-category-inference";
 import { addProductToShoppingList } from "@/constants/shopping-list-store";
+import { fetchNearbyCommunityOffers, voteCommunityOffer, type CommunityOffer } from "@/constants/community-offers-store";
 
 const RADIOS = [
   { value: 1000, label: "1 km" },
@@ -91,9 +97,20 @@ interface SelectedOffer {
   store: StorePlace;
 }
 
+const LOCATION_PRIMER_KEY = "location_primer_seen_v1";
+
 export default function OfertasScreen() {
   const colors = useColors();
-  const userLocationState = useUserLocation();
+  // Primero se explica por qué hace falta la ubicación (ver cartel más abajo) y
+  // recién cuando el usuario lo confirma se pide el permiso real del sistema.
+  // null = todavía no se leyó AsyncStorage, false = hay que mostrar el cartel.
+  const [locationPrimerSeen, setLocationPrimerSeen] = useState<boolean | null>(null);
+  useEffect(() => {
+    void AsyncStorage.getItem(LOCATION_PRIMER_KEY).then((value) => {
+      setLocationPrimerSeen(value === "1");
+    });
+  }, []);
+  const userLocationState = useUserLocation({ autoRequest: locationPrimerSeen === true });
   const { userLocation, currentCity } = userLocationState;
   const [selectedRadius, setSelectedRadius] = useState(5000);
   const [selectedType, setSelectedType] = useState<string | null>(null);
@@ -101,6 +118,18 @@ export default function OfertasScreen() {
   const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [addedProducts, setAddedProducts] = useState<Set<string>>(new Set());
   const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(null);
+  const [communityOffers, setCommunityOffers] = useState<CommunityOffer[]>([]);
+  const [communityOffersLoading, setCommunityOffersLoading] = useState(false);
+  const [votingOfferId, setVotingOfferId] = useState<string | null>(null);
+  const [communityNotice, setCommunityNotice] = useState("");
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
+
+  const activeFilterCount = (selectedType !== null ? 1 : 0) + (selectedProductCategory !== "Todos" ? 1 : 0) + (selectedRadius !== 5000 ? 1 : 0);
+
+  const acceptLocationPrimer = useCallback(() => {
+    void AsyncStorage.setItem(LOCATION_PRIMER_KEY, "1");
+    setLocationPrimerSeen(true);
+  }, []);
 
   const { data: places, isLoading, isFallback: placesFallback, isError: placesError, refetch } = useAllNearbyPlaces(
     userLocation?.latitude ?? 0,
@@ -109,10 +138,43 @@ export default function OfertasScreen() {
     currentCity || undefined
   );
 
+  const loadCommunityOffers = useCallback(async () => {
+    if (!userLocation) return;
+    setCommunityOffersLoading(true);
+    try {
+      const offers = await fetchNearbyCommunityOffers(userLocation.latitude, userLocation.longitude, selectedRadius);
+      setCommunityOffers(offers);
+    } catch {
+      // Si falla, simplemente no se muestra esta sección - no es crítico para el resto de la pantalla
+    } finally {
+      setCommunityOffersLoading(false);
+    }
+  }, [userLocation, selectedRadius]);
+
   const onRefresh = useCallback(async () => {
     await userLocationState.retry();
     await refetch();
-  }, [refetch, userLocationState]);
+    await loadCommunityOffers();
+  }, [refetch, userLocationState, loadCommunityOffers]);
+
+  useEffect(() => {
+    void loadCommunityOffers();
+  }, [loadCommunityOffers]);
+
+  const handleVote = async (offerId: string, vote: boolean) => {
+    setVotingOfferId(offerId);
+    setCommunityNotice("");
+    try {
+      await voteCommunityOffer(offerId, vote);
+      if (Platform.OS !== "web") void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setCommunityNotice(vote ? "¡Gracias por confirmar!" : "Gracias, lo marcamos para revisión.");
+      await loadCommunityOffers();
+    } catch (error) {
+      setCommunityNotice(error instanceof Error ? error.message : "No se pudo registrar el voto.");
+    } finally {
+      setVotingOfferId(null);
+    }
+  };
 
   const filteredPlaces = selectedType
     ? (places ?? []).filter((p: StorePlace) => p.storeType === selectedType)
@@ -127,30 +189,7 @@ export default function OfertasScreen() {
   // Función para agregar producto en oferta al catálogo de productos
   const handleAddOfferProduct = async (offer: StoreOfferItem) => {
     const productName = offer.product;
-
-    // Determinar categoría y ícono
-    let category = "Almacén";
-    let icon = "🛒";
-    let unit = "un";
-
-    const lowerName = productName.toLowerCase();
-    if (lowerName.includes("leche") || lowerName.includes("yogur") || lowerName.includes("queso")) {
-      category = "Lácteos"; icon = "🥛"; unit = "lt";
-    } else if (lowerName.includes("pan") || lowerName.includes("factura")) {
-      category = "Panadería"; icon = "🍞"; unit = "paq";
-    } else if (lowerName.includes("fruta") || lowerName.includes("verdura") || lowerName.includes("banana") || lowerName.includes("manzana")) {
-      category = "Frutas y Verduras"; icon = "🍎"; unit = "kg";
-    } else if (lowerName.includes("carne") || lowerName.includes("pollo") || lowerName.includes("milanesa")) {
-      category = "Carnes"; icon = "🥩"; unit = "kg";
-    } else if (lowerName.includes("detergente") || lowerName.includes("lavandina") || lowerName.includes("jabón")) {
-      category = "Limpieza"; icon = "🧹"; unit = "lt";
-    } else if (lowerName.includes("papel") || lowerName.includes("jabón mano")) {
-      category = "Hogar"; icon = "🧻"; unit = "paq";
-    } else if (lowerName.includes("galleta") || lowerName.includes("papas fritas")) {
-      category = "Snacks"; icon = "🍪"; unit = "paq";
-    } else if (lowerName.includes("coca") || lowerName.includes("agua") || lowerName.includes("cerveza") || lowerName.includes("jugo")) {
-      category = "Bebidas"; icon = "🥤"; unit = "lt";
-    }
+    const { category, icon, unit } = inferProductCategory(productName);
 
     // Extraer precio numérico
     let price = 0;
@@ -208,70 +247,181 @@ export default function OfertasScreen() {
             <LocationPill location={userLocationState} />
           </View>
           <Text className="text-sm text-muted mt-1">
-            {isLoading ? "Buscando comercios..." : `${sortedPlaces.length} comercios con ofertas`}
+            {locationPrimerSeen === false
+              ? "Descuentos reales de comercios cerca tuyo"
+              : isLoading ? "Buscando comercios..." : `${sortedPlaces.length} comercios con ofertas`}
           </Text>
-          {!isLoading && (
+          {locationPrimerSeen === true && !isLoading && (
             <DataSourceBanner isFallback={placesFallback} isError={placesError} onRetry={() => void onRefresh()} />
           )}
+          <TouchableOpacity
+            onPress={() => router.push("/cargar-oferta")}
+            className="flex-row items-center justify-center gap-2 rounded-2xl mt-3 py-3"
+            style={{ backgroundColor: colors.tint }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "800" }}>📷 Cargar una oferta con foto</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Radio filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
-          <View className="flex-row gap-2">
-            {RADIOS.map((r) => (
-              <TouchableOpacity
-                key={r.value}
-                onPress={() => setSelectedRadius(r.value)}
-                className={`px-4 py-2 rounded-full ${selectedRadius === r.value ? "bg-primary" : "bg-surface"}`}
-                style={selectedRadius !== r.value ? { borderWidth: 1, borderColor: colors.border } : {}}
-              >
-                <Text className={`text-xs font-medium ${selectedRadius === r.value ? "text-background" : "text-foreground"}`}>
-                  {r.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        {locationPrimerSeen === false ? (
+          <View style={{ borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, borderRadius: 18, padding: 18, marginTop: 8 }}>
+            <Text style={{ fontSize: 30 }}>📍</Text>
+            <Text className="text-lg font-bold text-foreground mt-2">Activá tu ubicación</Text>
+            <Text className="text-sm text-muted mt-1" style={{ lineHeight: 19 }}>
+              La necesitamos para mostrarte ofertas reales de comercios cerca tuyo, no genéricas. Nunca la
+              compartimos ni la usamos para otra cosa.
+            </Text>
+            <TouchableOpacity
+              onPress={acceptLocationPrimer}
+              className="rounded-2xl mt-4 py-3 items-center"
+              style={{ backgroundColor: colors.primary }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "800" }}>Ver ofertas cerca mío</Text>
+            </TouchableOpacity>
           </View>
-        </ScrollView>
+        ) : (
+          <>
+            {/* Toggle de filtros: colapsados por defecto para mostrar ofertas antes que decisiones */}
+            <TouchableOpacity
+              onPress={() => setFiltersExpanded((v) => !v)}
+              className="flex-row items-center justify-between mt-3 px-1"
+            >
+              <Text className="text-sm font-bold text-foreground">
+                Filtros{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+              </Text>
+              <Text style={{ color: colors.primary, fontWeight: "700" }}>{filtersExpanded ? "Ocultar ▲" : "Mostrar ▼"}</Text>
+            </TouchableOpacity>
 
-        {/* Type filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
-          <View className="flex-row gap-2">
-            {TYPE_FILTERS.map((f) => {
-              const active = (f.value === null && selectedType === null) || selectedType === f.value;
-              return (
-                <TouchableOpacity
-                  key={f.value ?? "all"}
-                  onPress={() => setSelectedType(f.value)}
-                  className={`px-3 py-2 rounded-full ${active ? "bg-primary" : "bg-surface"}`}
-                  style={active ? {} : { borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Text style={{ fontSize: 14 }}>{f.icon}</Text>
-                  <Text className={`text-xs font-medium ${active ? "text-background" : "text-foreground"}`}>{f.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </ScrollView>
+            {filtersExpanded && (
+              <>
+                {/* Radio filter */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
+                  <View className="flex-row gap-2">
+                    {RADIOS.map((r) => (
+                      <TouchableOpacity
+                        key={r.value}
+                        onPress={() => setSelectedRadius(r.value)}
+                        className={`px-4 py-2 rounded-full ${selectedRadius === r.value ? "bg-primary" : "bg-surface"}`}
+                        style={selectedRadius !== r.value ? { borderWidth: 1, borderColor: colors.border } : {}}
+                      >
+                        <Text className={`text-xs font-medium ${selectedRadius === r.value ? "text-background" : "text-foreground"}`}>
+                          {r.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
 
-        {/* Product category filter */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
-          <View className="flex-row gap-2">
-            {PRODUCT_CATEGORIES.map((cat) => {
-              const active = selectedProductCategory === cat;
-              return (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setSelectedProductCategory(cat)}
-                  className={`px-3 py-2 rounded-full ${active ? "bg-primary" : "bg-surface"}`}
-                  style={active ? {} : { borderWidth: 1, borderColor: colors.border }}
-                >
-                  <Text style={{ fontSize: 14 }}>{CATEGORY_ICONS[cat] || "🏷️"}</Text>
-                  <Text className={`text-xs font-medium ${active ? "text-background" : "text-foreground"}`}>{cat}</Text>
-                </TouchableOpacity>
-              );
-            })}
+                {/* Type filter */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
+                  <View className="flex-row gap-2">
+                    {TYPE_FILTERS.map((f) => {
+                      const active = (f.value === null && selectedType === null) || selectedType === f.value;
+                      return (
+                        <TouchableOpacity
+                          key={f.value ?? "all"}
+                          onPress={() => setSelectedType(f.value)}
+                          className={`px-3 py-2 rounded-full ${active ? "bg-primary" : "bg-surface"}`}
+                          style={active ? {} : { borderWidth: 1, borderColor: colors.border }}
+                        >
+                          <Text style={{ fontSize: 14 }}>{f.icon}</Text>
+                          <Text className={`text-xs font-medium ${active ? "text-background" : "text-foreground"}`}>{f.label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+
+                {/* Product category filter */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-3" contentContainerStyle={{ paddingRight: 20 }}>
+                  <View className="flex-row gap-2">
+                    {PRODUCT_CATEGORIES.map((cat) => {
+                      const active = selectedProductCategory === cat;
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          onPress={() => setSelectedProductCategory(cat)}
+                          className={`px-3 py-2 rounded-full ${active ? "bg-primary" : "bg-surface"}`}
+                          style={active ? {} : { borderWidth: 1, borderColor: colors.border }}
+                        >
+                          <Text style={{ fontSize: 14 }}>{CATEGORY_ICONS[cat] || "🏷️"}</Text>
+                          <Text className={`text-xs font-medium ${active ? "text-background" : "text-foreground"}`}>{cat}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </>
+            )}
+
+        {/* Ofertas comunitarias (cargadas por usuarios con foto) */}
+        {communityOffers.length > 0 && (
+          <View className="mt-5">
+            <Text className="text-base font-bold text-foreground mb-2">Ofertas de la comunidad</Text>
+            {communityNotice ? (
+              <View style={{ borderWidth: 1, borderColor: colors.primary, backgroundColor: colors.primary + "14", borderRadius: 12, padding: 10, marginBottom: 10 }}>
+                <Text style={{ color: colors.foreground }}>{communityNotice}</Text>
+              </View>
+            ) : null}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20, gap: 12 }}>
+              {communityOffers.map((offer) => (
+                <View key={offer.id} style={{ width: 220, borderWidth: 1, borderColor: colors.border, borderRadius: 16, overflow: "hidden", backgroundColor: colors.surface }}>
+                  <Image source={{ uri: offer.photoUrl }} style={{ width: "100%", height: 130 }} />
+                  <View style={{ padding: 10 }}>
+                    <Text className="text-sm font-bold text-foreground" numberOfLines={2}>{offer.productName}</Text>
+                    <Text style={{ color: colors.tint, fontWeight: "800", fontSize: 16, marginTop: 4 }}>{formatPrice(offer.priceCents / 100)}</Text>
+                    <Text className="text-xs text-muted mt-1" numberOfLines={1}>
+                      {offer.storeNameManual}{offer.storeTypeManual ? ` · ${offer.storeTypeManual}` : ""}
+                    </Text>
+                    <Text className="text-xs text-muted mt-1">📍 {(offer.distanceMeters / 1000).toFixed(1)} km</Text>
+                    <View
+                      style={{
+                        alignSelf: "flex-start",
+                        marginTop: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 10,
+                        backgroundColor:
+                          offer.status === "vigente" ? colors.success + "22" : offer.status === "en_revision" ? "#F59E0B22" : colors.muted + "22",
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 11,
+                          fontWeight: "700",
+                          color: offer.status === "vigente" ? colors.success : offer.status === "en_revision" ? "#F59E0B" : colors.muted,
+                        }}
+                      >
+                        {offer.status === "vigente" ? "✓ Confirmada" : offer.status === "en_revision" ? "En revisión" : "Sin confirmar"}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+                      <TouchableOpacity
+                        disabled={votingOfferId === offer.id}
+                        onPress={() => void handleVote(offer.id, true)}
+                        style={{ flex: 1, borderWidth: 1, borderColor: colors.success, borderRadius: 10, paddingVertical: 8, alignItems: "center", opacity: votingOfferId === offer.id ? 0.5 : 1 }}
+                      >
+                        <Text style={{ color: colors.success, fontWeight: "700", fontSize: 12 }}>👍 Sigue</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled={votingOfferId === offer.id}
+                        onPress={() => void handleVote(offer.id, false)}
+                        style={{ flex: 1, borderWidth: 1, borderColor: colors.error, borderRadius: 10, paddingVertical: 8, alignItems: "center", opacity: votingOfferId === offer.id ? 0.5 : 1 }}
+                      >
+                        <Text style={{ color: colors.error, fontWeight: "700", fontSize: 12 }}>👎 Ya no</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <AddToListButton
+                      isAdded={addedProducts.has(offer.productName)}
+                      onPress={() => void handleAddOfferProduct({ product: offer.productName, price: formatPrice(offer.priceCents / 100) })}
+                      colors={colors}
+                    />
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
           </View>
-        </ScrollView>
+        )}
 
         {/* Loading */}
         {isLoading && (
@@ -375,6 +525,8 @@ export default function OfertasScreen() {
             })}
           </View>
         )}
+          </>
+        )}
       </ScrollView>
 
       {/* Bottom sheet for selected store */}
@@ -443,12 +595,11 @@ export default function OfertasScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity
+              <AddToListButton
+                isAdded={addedProducts.has(selectedOffer.offer.product)}
                 onPress={() => handleAddOfferProduct(selectedOffer.offer)}
-                className="items-center justify-center py-4 rounded-2xl bg-primary mt-5"
-              >
-                <Text className="text-background font-bold text-base">+ Agregar a mi lista</Text>
-              </TouchableOpacity>
+                colors={colors}
+              />
               <TouchableOpacity
                 onPress={() => openNavigation(selectedOffer.store)}
                 className="items-center justify-center py-4 rounded-2xl mt-3"
@@ -461,6 +612,72 @@ export default function OfertasScreen() {
         </View>
       </Modal>
     </ScreenContainer>
+  );
+}
+
+/** Botón de "Agregar a la lista" con feedback inmediato: al tocar, un "+1" sube
+ * y se desvanece sobre el propio botón (en vez de animar algo volando hasta la
+ * pestaña Lista, que cruza pantallas y es más frágil). El número real ya lo
+ * actualiza el badge rojo del carrito abajo, en el mismo instante. */
+function AddToListButton({
+  isAdded,
+  onPress,
+  colors,
+  compact,
+}: {
+  isAdded: boolean;
+  onPress: () => void;
+  colors: any;
+  compact?: boolean;
+}) {
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const [showFloat, setShowFloat] = useState(false);
+
+  const handlePress = (event?: any) => {
+    event?.stopPropagation?.();
+    if (isAdded) return;
+    onPress();
+    setShowFloat(true);
+    floatAnim.setValue(0);
+    Animated.timing(floatAnim, { toValue: 1, duration: 650, useNativeDriver: true }).start(() => {
+      setShowFloat(false);
+    });
+  };
+
+  return (
+    <View style={{ position: "relative" }}>
+      {showFloat && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            alignSelf: "center",
+            top: 0,
+            opacity: floatAnim.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 1, 0] }),
+            transform: [{ translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -26] }) }],
+          }}
+        >
+          <Text style={{ color: colors.success, fontWeight: "800", fontSize: 13 }}>+1 🛒</Text>
+        </Animated.View>
+      )}
+      <TouchableOpacity
+        onPress={handlePress}
+        disabled={isAdded}
+        className={compact ? "ml-2 rounded-lg px-2 py-1" : "items-center justify-center py-4 rounded-2xl mt-5"}
+        style={
+          compact
+            ? { backgroundColor: isAdded ? colors.success + "20" : colors.primary + "15", borderWidth: 1, borderColor: isAdded ? colors.success : colors.primary }
+            : { backgroundColor: isAdded ? colors.success + "20" : colors.primary }
+        }
+      >
+        <Text
+          className={compact ? "text-[10px] font-bold" : "font-bold text-base"}
+          style={{ color: compact ? (isAdded ? colors.success : colors.primary) : isAdded ? colors.success : "#fff" }}
+        >
+          {isAdded ? "✓ Agregado" : compact ? "+ Agregar" : "+ Agregar a mi lista"}
+        </Text>
+      </TouchableOpacity>
+    </View>
   );
 }
 
@@ -537,19 +754,12 @@ function StoreOffersInline({
                 <Text className="text-xs text-foreground flex-1" numberOfLines={1}>{offer.product}</Text>
                 <Text className="text-xs font-bold text-success ml-2">{offer.price}</Text>
               </View>
-              <TouchableOpacity
-                onPress={(event) => { event.stopPropagation(); void onAddProduct(offer); }}
-                className="ml-2 rounded-lg px-2 py-1"
-                style={{
-                  backgroundColor: isAdded ? colors.success + '20' : colors.primary + '15',
-                  borderWidth: 1,
-                  borderColor: isAdded ? colors.success : colors.primary,
-                }}
-              >
-                <Text className="text-[10px] font-bold" style={{ color: isAdded ? colors.success : colors.primary }}>
-                  {isAdded ? "✓ Agregado" : "+ Agregar"}
-                </Text>
-              </TouchableOpacity>
+              <AddToListButton
+                isAdded={isAdded}
+                onPress={() => onAddProduct(offer)}
+                colors={colors}
+                compact
+              />
             </TouchableOpacity>
           );
         })}

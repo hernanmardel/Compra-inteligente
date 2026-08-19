@@ -326,3 +326,44 @@ function buildAddress(tags: { [key: string]: string }, lat: number, lng: number)
     return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
   }
 }
+
+/**
+ * Reverse geocoding a nivel de calle y altura (para autocompletar el campo
+ * "Dirección" al cargar una oferta comunitaria con foto). Distinto del
+ * reverseGeocode() de arriba, que solo devuelve ciudad/provincia/país.
+ */
+export async function reverseGeocodeAddress(
+  lat: number,
+  lng: number
+): Promise<string | null> {
+  try {
+    const response = await axios.get('https://nominatim.openstreetmap.org/reverse', {
+      params: {
+        format: 'json',
+        lat,
+        lon: lng,
+        zoom: 18,
+        addressdetails: 1,
+        'accept-language': 'es',
+      },
+      headers: {
+        'User-Agent': USER_AGENT,
+        'Accept': 'application/json',
+      },
+      timeout: 10000,
+    });
+
+    const addr = response.data.address || {};
+    const street = addr.road || addr.pedestrian || addr.footway || '';
+    const number = addr.house_number || '';
+    const city = addr.city || addr.town || addr.village || addr.suburb || '';
+
+    if (!street && !city) return null;
+
+    const streetLine = number ? `${street} ${number}` : street;
+    return [streetLine, city].filter(Boolean).join(', ');
+  } catch (error: any) {
+    console.error('Nominatim reverse geocode (address) error:', error.message);
+    return null;
+  }
+}

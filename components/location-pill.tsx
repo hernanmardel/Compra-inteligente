@@ -23,6 +23,10 @@ export function LocationPill({ location }: LocationPillProps) {
     await retry();
   };
 
+  if (status === "idle") {
+    return null;
+  }
+
   if (status === "loading") {
     return (
       <View

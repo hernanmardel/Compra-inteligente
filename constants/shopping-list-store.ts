@@ -10,6 +10,19 @@ const DEFAULT_LIST: ShoppingListItem[] = [
   { id: "starter-eggs", product: PRODUCTS[6], quantity: 1, checked: true, estimatedPrice: 1990 },
 ];
 
+// Suscriptores que quieren enterarse cuando cambia la lista (ej. el badge del
+// tab "Lista" en la barra inferior), sin tener que abrir esa pantalla.
+const listeners = new Set<(items: ShoppingListItem[]) => void>();
+
+export function subscribeShoppingList(callback: (items: ShoppingListItem[]) => void): () => void {
+  listeners.add(callback);
+  return () => listeners.delete(callback);
+}
+
+function notifyListeners(items: ShoppingListItem[]) {
+  listeners.forEach((callback) => callback(items));
+}
+
 export async function getShoppingListItems(): Promise<ShoppingListItem[]> {
   const saved = await AsyncStorage.getItem(SHOPPING_LIST_KEY);
   if (!saved) return DEFAULT_LIST;
@@ -24,6 +37,7 @@ export async function getShoppingListItems(): Promise<ShoppingListItem[]> {
 
 export async function saveShoppingListItems(items: ShoppingListItem[]): Promise<void> {
   await AsyncStorage.setItem(SHOPPING_LIST_KEY, JSON.stringify(items));
+  notifyListeners(items);
 }
 
 /** Inserta el producto en la lista o aumenta su cantidad si ya estaba pendiente.
